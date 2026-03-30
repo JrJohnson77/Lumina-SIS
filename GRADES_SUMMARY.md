@@ -175,10 +175,10 @@ You can verify grades via the API:
 
 ```bash
 # Get grades for a class (requires authentication)
-GET /api/gradebook?class_id={class_id}&term=Term 1&academic_year=2024-2025
+GET /api/gradebook?class_id={class_id}&term=Term 1&academic_year=2025-2026
 
 # Get grades for a student
-GET /api/gradebook/student/{student_id}?term=Term 1&academic_year=2024-2025
+GET /api/gradebook/student/{student_id}?term=Term 1&academic_year=2025-2026
 ```
 
 ---
@@ -187,4 +187,5 @@ GET /api/gradebook/student/{student_id}?term=Term 1&academic_year=2024-2025
 **Data Coverage**: 100% (299/299 students)  
 **Total Grade Records**: 299  
 **Total Subject Grades**: 2,990 (299 students × 10 subjects)  
+**Academic Year**: 2025-2026, Term 1
 **Status**: ✅ COMPLETE AND READY FOR TESTING

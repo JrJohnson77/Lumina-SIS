@@ -199,7 +199,7 @@ The system now has **3 schools** with comprehensive dummy data:
 ### Step 3: View Gradebook (COMPLETE GRADES!)
 1. Go to Gradebook page
 2. Select any class (e.g., SUNF-Grade 3A)
-3. Choose Term 1, Academic Year 2024-2025
+3. Choose Term 1, Academic Year 2025-2026
 4. View complete grade entries with all assessment components
 5. Every student has grades for all 10 subjects
 6. Each subject shows 6 component scores (HW, GW, Project, Quiz, Mid-Term, Final)
@@ -264,10 +264,11 @@ python3 scripts/seed_two_schools.py
 - Attendance is weighted: 93% present, 5% absent, 2% late
 - Grades are realistic with proper weighted calculations
 - Social skills are weighted towards positive ratings
-- All data uses current academic year: 2024-2025, Term 1
+- All data uses current academic year: 2025-2026, Term 1
 
 ---
 
 **Generated on:** March 30, 2025
 **Script Version:** 1.0
 **System:** Lumina-SIS (Student Information System)
+**Academic Year:** 2025-2026, Term 1
