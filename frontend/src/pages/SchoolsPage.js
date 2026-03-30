@@ -69,6 +69,17 @@ export default function SchoolsPage() {
     const [expandedSubject, setExpandedSubject] = useState(null);
     const [loadingTemplate, setLoadingTemplate] = useState(false);
 
+    // Signatures state
+    const [principalSignature, setPrincipalSignature] = useState('');
+    const [teacherSignature, setTeacherSignature] = useState('');
+    const [uploadingSignature, setUploadingSignature] = useState(false);
+
+    // Academic years state
+    const [academicYears, setAcademicYears] = useState([]);
+    const [currentAcademicYear, setCurrentAcademicYear] = useState('2025-2026');
+    const [newYear, setNewYear] = useState('');
+    const [savingYear, setSavingYear] = useState(false);
+
     useEffect(() => { fetchSchools(); }, []);
 
     const fetchSchools = async () => {
@@ -246,6 +257,99 @@ export default function SchoolsPage() {
         setTemplate({ ...template, social_skills_categories: c });
     };
 
+
+    // ========== SIGNATURE MANAGEMENT FUNCTIONS ==========
+    const handleUploadSignature = async (type, file) => {
+        if (!editingSchool) { toast.error('Save school first'); return; }
+        setUploadingSignature(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await axios.post(
+                `${API}/schools/${editingSchool.id}/signatures/upload?signature_type=${type}`,
+                formData,
+                { headers: { 'Content-Type': 'multipart/form-data' } }
+            );
+            if (type === 'principal') {
+                setPrincipalSignature(res.data.signature_url);
+            } else {
+                setTeacherSignature(res.data.signature_url);
+            }
+            toast.success(`${type === 'principal' ? 'Principal' : 'Teacher'} signature uploaded`);
+        } catch (error) {
+            toast.error('Failed to upload signature');
+        } finally {
+            setUploadingSignature(false);
+        }
+    };
+
+    const fetchSignatures = async (schoolId) => {
+        try {
+            const res = await axios.get(`${API}/schools/${schoolId}/signatures`);
+            setPrincipalSignature(res.data.principal_signature || '');
+            setTeacherSignature(res.data.teacher_signature || '');
+        } catch (error) {
+            console.error('Failed to fetch signatures');
+        }
+    };
+
+    // ========== ACADEMIC YEAR MANAGEMENT FUNCTIONS ==========
+    const fetchSchoolDetails = async (schoolId) => {
+        try {
+            const res = await axios.get(`${API}/schools/${schoolId}`);
+            setAcademicYears(res.data.academic_years || []);
+            setCurrentAcademicYear(res.data.current_academic_year || '2025-2026');
+        } catch (error) {
+            console.error('Failed to fetch school details');
+        }
+    };
+
+    const handleAddAcademicYear = async () => {
+        if (!newYear || !editingSchool) return;
+        setSavingYear(true);
+        try {
+            await axios.post(`${API}/schools/${editingSchool.id}/academic-years?year=${newYear}`);
+            toast.success('Academic year added');
+            setNewYear('');
+            fetchSchoolDetails(editingSchool.id);
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Failed to add academic year');
+        } finally {
+            setSavingYear(false);
+        }
+    };
+
+    const handleToggleYear = async (year, isEnabled) => {
+        if (!editingSchool) return;
+        try {
+            await axios.put(`${API}/schools/${editingSchool.id}/academic-years/${year}/toggle?is_enabled=${isEnabled}`);
+            toast.success(`Academic year ${isEnabled ? 'enabled' : 'disabled'}`);
+            fetchSchoolDetails(editingSchool.id);
+        } catch (error) {
+            toast.error('Failed to toggle academic year');
+        }
+    };
+
+    const handleSetCurrentYear = async (year) => {
+        if (!editingSchool) return;
+        try {
+            await axios.put(`${API}/schools/${editingSchool.id}/academic-years/${year}/set-current`);
+            toast.success(`Current academic year set to ${year}`);
+            setCurrentAcademicYear(year);
+            fetchSchoolDetails(editingSchool.id);
+        } catch (error) {
+            toast.error('Failed to set current year');
+        }
+    };
+
+    // Update handleEdit to fetch signatures and academic years
+    useEffect(() => {
+        if (editingSchool) {
+            fetchSignatures(editingSchool.id);
+            fetchSchoolDetails(editingSchool.id);
+        }
+    }, [editingSchool]);
+
     if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
     // ========== EDITING / CREATING VIEW ==========
@@ -270,6 +374,8 @@ export default function SchoolsPage() {
                         <TabsTrigger value="basic" className="rounded-md text-sm">Basic Info</TabsTrigger>
                         {(editingSchool || formData.school_code) && (
                             <>
+                                <TabsTrigger value="signatures" className="rounded-md text-sm">Signatures</TabsTrigger>
+                                <TabsTrigger value="academic-years" className="rounded-md text-sm">Academic Years</TabsTrigger>
                                 <TabsTrigger value="gradebook" className="rounded-md text-sm">Gradebook Settings</TabsTrigger>
                                 <TabsTrigger value="template" className="rounded-md text-sm">Report Template</TabsTrigger>
                             </>
@@ -315,6 +421,193 @@ export default function SchoolsPage() {
                                         </Button>
                                     </div>
                                 </form>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+
+
+                    {/* ===== SIGNATURES TAB ===== */}
+                    <TabsContent value="signatures">
+                        <Card className="rounded-2xl border-border/50">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <Edit2 className="w-5 h-5" />
+                                    School Signatures
+                                </CardTitle>
+                                <p className="text-sm text-muted-foreground">Upload signatures for principal and teachers to appear on report cards</p>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {/* Principal Signature */}
+                                <div>
+                                    <Label className="text-sm font-medium mb-2 block">Principal Signature</Label>
+                                    <div className="flex items-center gap-4">
+                                        {principalSignature && (
+                                            <div className="border border-border rounded-lg p-3 bg-muted/30">
+                                                <img 
+                                                    src={`${process.env.REACT_APP_BACKEND_URL}${principalSignature}`} 
+                                                    alt="Principal Signature" 
+                                                    className="h-16 object-contain"
+                                                />
+                                            </div>
+                                        )}
+                                        <div>
+                                            <Input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={(e) => e.target.files[0] && handleUploadSignature('principal', e.target.files[0])}
+                                                disabled={uploadingSignature}
+                                                className="w-64"
+                                            />
+                                            <p className="text-xs text-muted-foreground mt-1">PNG, JPG (max 5MB)</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Teacher Signature */}
+                                <div>
+                                    <Label className="text-sm font-medium mb-2 block">Teacher Signature</Label>
+                                    <div className="flex items-center gap-4">
+                                        {teacherSignature && (
+                                            <div className="border border-border rounded-lg p-3 bg-muted/30">
+                                                <img 
+                                                    src={`${process.env.REACT_APP_BACKEND_URL}${teacherSignature}`} 
+                                                    alt="Teacher Signature" 
+                                                    className="h-16 object-contain"
+                                                />
+                                            </div>
+                                        )}
+                                        <div>
+                                            <Input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={(e) => e.target.files[0] && handleUploadSignature('teacher', e.target.files[0])}
+                                                disabled={uploadingSignature}
+                                                className="w-64"
+                                            />
+                                            <p className="text-xs text-muted-foreground mt-1">PNG, JPG (max 5MB)</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {uploadingSignature && (
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Uploading signature...
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* ===== ACADEMIC YEARS TAB ===== */}
+                    <TabsContent value="academic-years">
+                        <Card className="rounded-2xl border-border/50">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <BookOpen className="w-5 h-5" />
+                                    Academic Year Management
+                                </CardTitle>
+                                <p className="text-sm text-muted-foreground">Manage academic years and control access to historical data</p>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {/* Current Year Display */}
+                                <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs font-medium text-muted-foreground">Current Academic Year</p>
+                                            <p className="text-lg font-bold text-primary">{currentAcademicYear}</p>
+                                        </div>
+                                        <Award className="w-8 h-8 text-primary/40" />
+                                    </div>
+                                </div>
+
+                                {/* Add New Year */}
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-medium">Add New Academic Year</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="e.g., 2026-2027"
+                                            value={newYear}
+                                            onChange={(e) => setNewYear(e.target.value)}
+                                            className="max-w-xs"
+                                        />
+                                        <Button 
+                                            onClick={handleAddAcademicYear} 
+                                            disabled={!newYear || savingYear}
+                                            className="rounded-lg"
+                                        >
+                                            {savingYear ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                                            Add Year
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Academic Years List */}
+                                <div className="space-y-3">
+                                    <Label className="text-sm font-medium">Academic Years</Label>
+                                    {academicYears.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">No academic years configured</p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {academicYears.map((year, index) => (
+                                                <div 
+                                                    key={index} 
+                                                    className={`p-4 rounded-lg border ${year.is_current ? 'bg-primary/5 border-primary/30' : 'bg-muted/30 border-border'}`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <p className="font-medium">{year.year}</p>
+                                                            {year.is_current && (
+                                                                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
+                                                                    Current
+                                                                </span>
+                                                            )}
+                                                            {!year.is_enabled && (
+                                                                <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/20 text-destructive font-medium">
+                                                                    Locked
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <Switch
+                                                                    checked={year.is_enabled}
+                                                                    onCheckedChange={(checked) => handleToggleYear(year.year, checked)}
+                                                                />
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {year.is_enabled ? 'Enabled' : 'Disabled'}
+                                                                </span>
+                                                            </div>
+                                                            {!year.is_current && year.is_enabled && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => handleSetCurrentYear(year.year)}
+                                                                    className="rounded-lg"
+                                                                >
+                                                                    Set as Current
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-2 flex gap-2 text-xs text-muted-foreground">
+                                                        {year.terms.map((term, ti) => (
+                                                            <span key={ti} className="px-2 py-1 rounded bg-muted">
+                                                                {term}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                    {!year.is_enabled && (
+                                                        <p className="mt-2 text-xs text-muted-foreground">
+                                                            This year is locked. No changes can be made to grades, attendance, or student records for this period.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </CardContent>
                         </Card>
                     </TabsContent>

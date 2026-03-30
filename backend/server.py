@@ -94,7 +94,7 @@ def calculate_age(dob_str: str) -> int:
         today = date.today()
         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
         return age
-    except:
+    except (ValueError, AttributeError):
         return 0
 
 # Create the main app
@@ -114,6 +114,12 @@ class UserRole:
     TEACHER = "teacher"
     PARENT = "parent"
 
+class AcademicYear(BaseModel):
+    year: str  # e.g., "2025-2026"
+    terms: List[str] = ["Term 1", "Term 2", "Term 3"]
+    is_enabled: bool = True
+    is_current: bool = False
+
 class SchoolBase(BaseModel):
     school_code: str
     name: str
@@ -122,6 +128,10 @@ class SchoolBase(BaseModel):
     email: Optional[str] = ""
     logo_url: Optional[str] = ""
     is_active: bool = True
+    current_academic_year: Optional[str] = "2025-2026"
+    principal_signature: Optional[str] = ""
+    teacher_signature: Optional[str] = ""
+    academic_years: List[AcademicYear] = []
 
 class SchoolCreate(SchoolBase):
     pass
@@ -130,6 +140,10 @@ class SchoolResponse(SchoolBase):
     model_config = ConfigDict(extra="ignore")
     id: str
     created_at: str
+    
+class AcademicYearUpdate(BaseModel):
+    year: str
+    is_enabled: bool
 
 class UserBase(BaseModel):
     username: str
@@ -670,6 +684,14 @@ async def create_school(school: SchoolCreate, current_user: dict = Depends(requi
     
     school_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    
+    # Set default academic years if not provided
+    if not school.academic_years:
+        school.academic_years = [
+            AcademicYear(year="2025-2026", terms=["Term 1", "Term 2", "Term 3"], is_enabled=True, is_current=True),
+            AcademicYear(year="2024-2025", terms=["Term 1", "Term 2", "Term 3"], is_enabled=False, is_current=False)
+        ]
+    
     doc = {
         "id": school_id,
         **school.model_dump(),
@@ -722,6 +744,164 @@ async def delete_school(school_id: str, current_user: dict = Depends(require_sup
     
     await db.schools.delete_one({"id": school_id})
     return {"message": "School deleted successfully"}
+
+
+# ==================== ACADEMIC YEAR MANAGEMENT ====================
+
+@api_router.post("/schools/{school_id}/academic-years")
+async def add_academic_year(
+    school_id: str,
+    year: str,
+    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN]))
+):
+    """Add a new academic year to a school"""
+    school = await db.schools.find_one({"id": school_id})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    
+    # Check if year already exists
+    academic_years = school.get("academic_years", [])
+    if any(ay.get("year") == year for ay in academic_years):
+        raise HTTPException(status_code=400, detail="Academic year already exists")
+    
+    new_year = {
+        "year": year,
+        "terms": ["Term 1", "Term 2", "Term 3"],
+        "is_enabled": True,
+        "is_current": False
+    }
+    
+    academic_years.append(new_year)
+    
+    await db.schools.update_one(
+        {"id": school_id},
+        {"$set": {"academic_years": academic_years}}
+    )
+    
+    return {"message": "Academic year added", "academic_year": new_year}
+
+@api_router.put("/schools/{school_id}/academic-years/{year}/toggle")
+async def toggle_academic_year(
+    school_id: str,
+    year: str,
+    is_enabled: bool,
+    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN]))
+):
+    """Enable or disable an academic year"""
+    school = await db.schools.find_one({"id": school_id})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    
+    academic_years = school.get("academic_years", [])
+    found = False
+    
+    for ay in academic_years:
+        if ay.get("year") == year:
+            ay["is_enabled"] = is_enabled
+            found = True
+            break
+    
+    if not found:
+        raise HTTPException(status_code=404, detail="Academic year not found")
+    
+    await db.schools.update_one(
+        {"id": school_id},
+        {"$set": {"academic_years": academic_years}}
+    )
+    
+    return {"message": f"Academic year {year} {'enabled' if is_enabled else 'disabled'}"}
+
+@api_router.put("/schools/{school_id}/academic-years/{year}/set-current")
+async def set_current_academic_year(
+    school_id: str,
+    year: str,
+    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN]))
+):
+    """Set the current academic year"""
+    school = await db.schools.find_one({"id": school_id})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    
+    academic_years = school.get("academic_years", [])
+    found = False
+    
+    # Set all to not current, then set the selected one
+    for ay in academic_years:
+        ay["is_current"] = False
+        if ay.get("year") == year:
+            ay["is_current"] = True
+            found = True
+    
+    if not found:
+        raise HTTPException(status_code=404, detail="Academic year not found")
+    
+    await db.schools.update_one(
+        {"id": school_id},
+        {"$set": {
+            "academic_years": academic_years,
+            "current_academic_year": year
+        }}
+    )
+    
+    return {"message": f"Current academic year set to {year}"}
+
+# ==================== SCHOOL SIGNATURE MANAGEMENT ====================
+
+@api_router.post("/schools/{school_id}/signatures/upload")
+async def upload_school_signature(
+    school_id: str,
+    signature_type: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN]))
+):
+    """Upload principal or teacher signature for a school"""
+    if signature_type not in ["principal", "teacher"]:
+        raise HTTPException(status_code=400, detail="Invalid signature type. Must be 'principal' or 'teacher'")
+    
+    school = await db.schools.find_one({"id": school_id})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large")
+    
+    file_id = str(uuid.uuid4())
+    filename = f"signature_{signature_type}_{school['school_code']}_{file_id}{ext}"
+    file_path = UPLOAD_DIR / filename
+    
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    signature_url = f"/api/uploads/{filename}"
+    
+    # Update school with signature
+    field_name = f"{signature_type}_signature"
+    await db.schools.update_one(
+        {"id": school_id},
+        {"$set": {field_name: signature_url}}
+    )
+    
+    return {"signature_url": signature_url, "type": signature_type}
+
+@api_router.get("/schools/{school_id}/signatures")
+async def get_school_signatures(
+    school_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get school signatures"""
+    school = await db.schools.find_one({"id": school_id}, {"_id": 0})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    
+    return {
+        "principal_signature": school.get("principal_signature", ""),
+        "teacher_signature": school.get("teacher_signature", "")
+    }
 
 # ==================== REPORT TEMPLATES (Superuser Only) ====================
 
@@ -1483,15 +1663,28 @@ async def get_class_report_cards(
             "social_skills": social_skills.get("skills", {}) if social_skills else {}
         })
     
-    report_cards.sort(key=lambda x: x["grades"].get("overall_score", 0) if x["grades"] else 0, reverse=True)
+    # Sort students alphabetically by LastName, FirstName MiddleName
+    def get_student_sort_key(card):
+        student = card["student"]
+        last_name = student.get("last_name", "").strip()
+        first_name = student.get("first_name", "").strip()
+        middle_name = student.get("middle_name", "").strip()
+        return (last_name.lower(), first_name.lower(), middle_name.lower())
+    
+    report_cards.sort(key=get_student_sort_key)
     
     for idx, card in enumerate(report_cards):
         card["position"] = idx + 1
     
-    # Get school signatures
-    signatures = await db.signatures.find_one({
+    # Get school info with signatures
+    school = await db.schools.find_one({
         "school_code": current_user["school_code"]
     }, {"_id": 0})
+    
+    signatures = {
+        "principal_signature": school.get("principal_signature", "") if school else "",
+        "teacher_signature": school.get("teacher_signature", "") if school else ""
+    }
     
     return {
         "class_info": class_info,
@@ -1648,7 +1841,7 @@ async def get_social_skills(
     
     return entry or {"skills": {}}
 
-# ==================== SIGNATURES ====================
+# ==================== SIGNATURES (DEPRECATED - Use School Signatures Instead) ====================
 
 @api_router.post("/signatures/upload")
 async def upload_signature(
@@ -1656,7 +1849,7 @@ async def upload_signature(
     file: UploadFile = File(...),
     current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN]))
 ):
-    """Upload teacher or principal signature"""
+    """DEPRECATED: Upload teacher or principal signature. Use /schools/{school_id}/signatures/upload instead"""
     if signature_type not in ["teacher", "principal"]:
         raise HTTPException(status_code=400, detail="Invalid signature type")
     
@@ -1677,18 +1870,38 @@ async def upload_signature(
     
     signature_url = f"/api/uploads/{filename}"
     
-    # Update signatures collection
+    # Update signatures collection (legacy)
     await db.signatures.update_one(
         {"school_code": current_user["school_code"]},
         {"$set": {f"{signature_type}_signature": signature_url, "updated_at": datetime.now(timezone.utc).isoformat()}},
         upsert=True
     )
     
+    # Also update school document (new way)
+    field_name = f"{signature_type}_signature"
+    await db.schools.update_one(
+        {"school_code": current_user["school_code"]},
+        {"$set": {field_name: signature_url}}
+    )
+    
     return {"signature_url": signature_url, "type": signature_type}
 
 @api_router.get("/signatures")
 async def get_signatures(current_user: dict = Depends(get_current_user)):
-    """Get school signatures"""
+    """DEPRECATED: Get school signatures. Use /schools/{school_id}/signatures instead"""
+    # Try to get from school first (new way)
+    school = await db.schools.find_one(
+        {"school_code": current_user["school_code"]},
+        {"_id": 0}
+    )
+    
+    if school and (school.get("principal_signature") or school.get("teacher_signature")):
+        return {
+            "principal_signature": school.get("principal_signature", ""),
+            "teacher_signature": school.get("teacher_signature", "")
+        }
+    
+    # Fall back to legacy collection
     signatures = await db.signatures.find_one(
         {"school_code": current_user["school_code"]},
         {"_id": 0}
