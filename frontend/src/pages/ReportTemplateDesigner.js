@@ -56,6 +56,19 @@ const DATA_FIELDS = [
         { key: 'attendance.present', label: 'Days Present' },
         { key: 'attendance.absent', label: 'Days Absent' },
     ]},
+    { cat: 'Grades', fields: [
+        { key: 'grades.overall_score', label: 'Overall Score' },
+        { key: 'grades.overall_grade', label: 'Overall Grade' },
+        { key: 'grades.overall_points', label: 'Overall GPA Points' },
+        { key: 'grades.subject.score', label: 'Subject Score (by name)' },
+        { key: 'grades.subject.grade', label: 'Subject Grade (by name)' },
+        { key: 'grades.subject.homework', label: 'Subject Homework' },
+        { key: 'grades.subject.groupWork', label: 'Subject Group Work' },
+        { key: 'grades.subject.project', label: 'Subject Project' },
+        { key: 'grades.subject.quiz', label: 'Subject Quiz' },
+        { key: 'grades.subject.midTerm', label: 'Subject Mid-Term' },
+        { key: 'grades.subject.endOfTerm', label: 'Subject End of Term' },
+    ]},
     { cat: 'Other', fields: [
         { key: 'teacher_comment', label: 'Teacher Comment' },
     ]},
@@ -268,18 +281,75 @@ const TypographyEditor = ({ styles, onChange }) => (
     </div>
 );
 
-const DataFieldPicker = ({ field, onChange }) => (
-    <div className="space-y-1">
-        <Label className="text-[10px] font-semibold">Data Field</Label>
-        <Select value={field||''} onValueChange={onChange}>
-            <SelectTrigger className="h-7 text-xs rounded-lg"><SelectValue placeholder="Select field"/></SelectTrigger>
-            <SelectContent>{DATA_FIELDS.map(cat=>(
-                <div key={cat.cat}><div className="px-2 py-1 text-[10px] font-bold text-muted-foreground">{cat.cat}</div>
-                {cat.fields.map(f=><SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>)}</div>
-            ))}</SelectContent>
-        </Select>
-    </div>
-);
+const DataFieldPicker = ({ field, onChange, template }) => {
+    const [subjectName, setSubjectName] = useState('');
+    const isGradeField = field?.startsWith('grades.subject.');
+    
+    // Extract subject name from field if it's a grade field
+    useEffect(() => {
+        if (isGradeField && field) {
+            const parts = field.split('.');
+            if (parts.length >= 3) {
+                setSubjectName(parts[2]);
+            }
+        }
+    }, [field, isGradeField]);
+    
+    const handleGradeFieldChange = (baseField) => {
+        if (baseField.startsWith('grades.subject.') && subjectName) {
+            const parts = baseField.split('.');
+            // Replace generic pattern with actual subject name
+            const newField = `grades.subject.${subjectName}.${parts[parts.length - 1]}`;
+            onChange(newField);
+        } else {
+            onChange(baseField);
+        }
+    };
+    
+    const schoolSubjects = template?.subjects?.map(s => s.name) || [
+        'English Language', 'Mathematics', 'Science', 'Social Studies',
+        'Religious Education', 'Physical Education', 'Creative Arts', 'Music', 'ICT', 'French'
+    ];
+    
+    return (
+        <div className="space-y-1">
+            <Label className="text-[10px] font-semibold">Data Field</Label>
+            <Select value={field||''} onValueChange={handleGradeFieldChange}>
+                <SelectTrigger className="h-7 text-xs rounded-lg"><SelectValue placeholder="Select field"/></SelectTrigger>
+                <SelectContent>{DATA_FIELDS.map(cat=>(
+                    <div key={cat.cat}><div className="px-2 py-1 text-[10px] font-bold text-muted-foreground">{cat.cat}</div>
+                    {cat.fields.map(f=><SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>)}</div>
+                ))}</SelectContent>
+            </Select>
+            
+            {isGradeField && (
+                <div className="mt-2 space-y-1">
+                    <Label className="text-[10px] font-semibold text-primary">Subject Name</Label>
+                    <Select value={subjectName} onValueChange={(val) => {
+                        setSubjectName(val);
+                        if (field) {
+                            const parts = field.split('.');
+                            const property = parts[parts.length - 1];
+                            onChange(`grades.subject.${val}.${property}`);
+                        }
+                    }}>
+                        <SelectTrigger className="h-7 text-xs rounded-lg bg-primary/5">
+                            <SelectValue placeholder="Choose subject"/>
+                        </SelectTrigger>
+                        <SelectContent>
+                            {schoolSubjects.map(subj => (
+                                <SelectItem key={subj} value={subj}>{subj}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-[9px] text-muted-foreground">
+                        Field: <code className="text-primary">{field || 'Not set'}</code>
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const GradesTablePropEditor = ({ config, onChange }) => {
     const defaultWeights = { homework: 5, groupWork: 5, project: 10, quiz: 10, midTerm: 30, endOfTerm: 40 };
@@ -1112,7 +1182,7 @@ export default function ReportTemplateDesigner({ schoolCodeProp, embedded = fals
                             )}
                             {selected.type === 'data-field' && (
                                 <div className="space-y-1.5">
-                                    <DataFieldPicker field={selected.config?.field} onChange={v=>updateElement(selected.id,{config:{...selected.config,field:v}})} />
+                                    <DataFieldPicker field={selected.config?.field} onChange={v=>updateElement(selected.id,{config:{...selected.config,field:v}})} template={template} />
                                     <div className="flex items-center gap-2"><Switch checked={selected.config?.showLabel!==false} onCheckedChange={v=>updateElement(selected.id,{config:{...selected.config,showLabel:v}})}/><Label className="text-[10px]">Show label</Label></div>
                                 </div>
                             )}

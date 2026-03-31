@@ -65,7 +65,30 @@ const calcWeightedFromTemplate = (assessments, weights) => {
 
 // ==================== CANVAS REPORT CARD RENDERER ====================
 const resolveField = (field, data, classInfo, term, academicYear) => {
-    const { student, attendance_summary, position } = data;
+    const { student, attendance_summary, position, grades } = data;
+    
+    // Handle subject-specific grade fields like grades.subject.Mathematics.score
+    if (field.startsWith('grades.subject.')) {
+        const parts = field.split('.');
+        if (parts.length >= 3) {
+            const subjectName = parts[2];
+            const property = parts[3] || 'score'; // default to score
+            
+            const subjectGrade = grades?.subjects?.find(s => s.subject === subjectName);
+            if (subjectGrade) {
+                if (property === 'score') return subjectGrade.score?.toFixed(1) || '-';
+                if (property === 'grade') return subjectGrade.grade || '-';
+                if (property === 'homework') return subjectGrade.homework ?? '-';
+                if (property === 'groupWork') return subjectGrade.groupWork ?? '-';
+                if (property === 'project') return subjectGrade.project ?? '-';
+                if (property === 'quiz') return subjectGrade.quiz ?? '-';
+                if (property === 'midTerm') return subjectGrade.midTerm ?? '-';
+                if (property === 'endOfTerm') return subjectGrade.endOfTerm ?? '-';
+            }
+            return '-';
+        }
+    }
+    
     const map = {
         'student.first_name': student?.first_name, 'student.last_name': student?.last_name,
         'student.middle_name': student?.middle_name, 'student.dob': student?.date_of_birth,
@@ -78,6 +101,10 @@ const resolveField = (field, data, classInfo, term, academicYear) => {
         'attendance.present': attendance_summary?.present,
         'attendance.absent': attendance_summary?.absent,
         'teacher_comment': student?.teacher_comment || '',
+        // Overall grade fields
+        'grades.overall_score': grades?.overall_score?.toFixed(1) || '-',
+        'grades.overall_grade': grades?.overall_grade || '-',
+        'grades.overall_points': grades?.overall_points?.toFixed(2) || '-',
     };
     return map[field] ?? `{{${field}}}`;
 };
