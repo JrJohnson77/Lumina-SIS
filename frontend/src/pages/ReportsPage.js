@@ -83,6 +83,12 @@ const resolveField = (field, data, classInfo, term, academicYear) => {
 };
 
 const CanvasReportCard = ({ data, classInfo, term, academicYear, totalStudents, signatures, template }) => {
+    // Add null/undefined safety checks
+    if (!data || !data.student) {
+        console.error('Invalid data provided to CanvasReportCard:', data);
+        return <div className="text-red-500 p-4">Error: Missing student data</div>;
+    }
+
     const tpl = template || {};
     const els = tpl.canvas_elements || [];
     const paperSize = tpl.paper_size || 'legal';
@@ -176,20 +182,21 @@ const CanvasReportCard = ({ data, classInfo, term, academicYear, totalStudents, 
                                 <th style={{border:'1px solid #999',padding:1}}>Grade</th>
                             </tr></thead>
                             <tbody>{subjects.map((sub,i)=>{
-                                const sg = subjectGrades.find(g=>g.subject===sub.name)||{};
+                                if (!sub || !sub.name) return null;
+                                const sg = subjectGrades.find(g=>g?.subject===sub.name)||{};
                                 const score = sg.score||0;
                                 const rounded = Math.round(score);
                                 let grade = '-';
-                                for(const g of gradeScale){ if(rounded>=g.min && rounded<=g.max){ grade=g.grade; break; } }
+                                for(const g of gradeScale){ if(g && rounded>=g.min && rounded<=g.max){ grade=g.grade; break; } }
                                 return (
-                                    <tr key={i} style={{backgroundColor:sub.is_core?'#eff6ff':i%2===0?'#fff':'#f9fafb'}}>
+                                    <tr key={`${sub.name}-${i}`} style={{backgroundColor:sub.is_core?'#eff6ff':i%2===0?'#fff':'#f9fafb'}}>
                                         <td style={{border:'1px solid #ccc',padding:2}}>{sub.name}{sub.is_core?'*':''}</td>
                                         {cfg.use_weighted && <><td style={{border:'1px solid #ccc',padding:1,textAlign:'center'}}>{sg.homework??'-'}</td><td style={{border:'1px solid #ccc',padding:1,textAlign:'center'}}>{sg.groupWork??'-'}</td><td style={{border:'1px solid #ccc',padding:1,textAlign:'center'}}>{sg.project??'-'}</td><td style={{border:'1px solid #ccc',padding:1,textAlign:'center'}}>{sg.quiz??'-'}</td><td style={{border:'1px solid #ccc',padding:1,textAlign:'center'}}>{sg.midTerm??'-'}</td><td style={{border:'1px solid #ccc',padding:1,textAlign:'center'}}>{sg.endOfTerm??'-'}</td></>}
                                         <td style={{border:'1px solid #ccc',padding:1,textAlign:'center',fontWeight:'bold'}}>{score>0?score.toFixed(1):'-'}</td>
                                         <td style={{border:'1px solid #ccc',padding:1,textAlign:'center',fontWeight:'bold'}}>{grade}</td>
                                     </tr>
                                 );
-                            })}</tbody>
+                            }).filter(Boolean)}</tbody>
                         </table>
                     </div>
                 );
@@ -203,20 +210,26 @@ const CanvasReportCard = ({ data, classInfo, term, academicYear, totalStudents, 
                     <div style={{...base,overflow:'visible'}}>
                         <div style={{backgroundColor:hBg,color:hTxt,padding:'2px 4px',fontWeight:'bold'}}>SOCIAL SKILLS AND ATTITUDES</div>
                         <div style={{display:'grid',gridTemplateColumns:`repeat(${Math.min(cats.length,2)},1fr)`,gap:6,border:'1px solid #ccc',padding:4}}>
-                            {cats.map(cat=>(
-                                <div key={cat.category_name}>
-                                    <div style={{fontWeight:'bold',marginBottom:2}}>{cat.category_name}</div>
-                                    {cat.skills.map(sk=>(
-                                        <div key={sk} style={{display:'flex',justifyContent:'space-between',marginBottom:1}}>
-                                            <span>{sk}</span>
-                                            <span>{ratings.map(r=>{
-                                                const checked = data.social_skills?.[sk]===r;
-                                                return <span key={r} style={{display:'inline-block',width:12,height:12,border:'1px solid #999',marginLeft:2,textAlign:'center',fontSize:8,lineHeight:'12px'}}>{checked?'✓':''}</span>;
-                                            })}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            ))}
+                            {cats.map((cat, catIdx)=>{
+                                if (!cat || !cat.category_name) return null;
+                                return (
+                                    <div key={`${cat.category_name}-${catIdx}`}>
+                                        <div style={{fontWeight:'bold',marginBottom:2}}>{cat.category_name}</div>
+                                        {(cat.skills || []).map((sk, skIdx)=>{
+                                            if (!sk) return null;
+                                            return (
+                                                <div key={`${sk}-${skIdx}`} style={{display:'flex',justifyContent:'space-between',marginBottom:1}}>
+                                                    <span>{sk}</span>
+                                                    <span>{ratings.map((r, rIdx)=>{
+                                                        const checked = data.social_skills?.[sk]===r;
+                                                        return <span key={`${r}-${rIdx}`} style={{display:'inline-block',width:12,height:12,border:'1px solid #999',marginLeft:2,textAlign:'center',fontSize:8,lineHeight:'12px'}}>{checked?'✓':''}</span>;
+                                                    })}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            }).filter(Boolean)}
                         </div>
                     </div>
                 );
@@ -232,17 +245,20 @@ const CanvasReportCard = ({ data, classInfo, term, academicYear, totalStudents, 
             backgroundSize: 'cover', backgroundPosition: 'center',
             transform: 'scale(1)', transformOrigin: 'top center',
         }}>
-            {els.map(el => (
-                <div key={el.id} style={{ 
-                    position:'absolute', 
-                    left: el.x, 
-                    top: el.y, 
-                    width: el.width, 
-                    height: el.height === 'auto' ? 'auto' : el.height 
-                }}>
-                    {renderElement(el)}
-                </div>
-            ))}
+            {els.map((el, idx) => {
+                if (!el || !el.id) return null;
+                return (
+                    <div key={`${el.id}-${idx}`} style={{ 
+                        position:'absolute', 
+                        left: el.x || 0, 
+                        top: el.y || 0, 
+                        width: el.width || 'auto', 
+                        height: el.height === 'auto' ? 'auto' : (el.height || 'auto')
+                    }}>
+                        {renderElement(el)}
+                    </div>
+                );
+            }).filter(Boolean)}
         </div>
     );
 };
@@ -258,13 +274,19 @@ const ReportCardRenderer = (props) => {
 
 // ==================== BLOCK-BASED REPORT CARD TEMPLATE ====================
 const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents, signatures, template }) => {
+    // Add null/undefined safety checks
+    if (!data || !data.student) {
+        console.error('Invalid data provided to DynamicReportCard:', data);
+        return <div className="text-red-500 p-4">Error: Missing student data</div>;
+    }
+
     const { student, grades, attendance_summary, position, social_skills } = data;
     const subjectGrades = grades?.subjects || [];
     const tpl = template || {};
     const gradeScale = tpl.grade_scale || [];
     const subjects = tpl.subjects || [];
-    const subjectNames = subjects.map(s => s.name);
-    const coreSubjectNames = subjects.filter(s => s.is_core).map(s => s.name);
+    const subjectNames = subjects.map(s => s?.name).filter(Boolean);
+    const coreSubjectNames = subjects.filter(s => s?.is_core).map(s => s?.name).filter(Boolean);
     const useWeighted = tpl.use_weighted_grading;
     const weights = tpl.assessment_weights || {};
     const sections = tpl.sections || {};
@@ -278,7 +300,7 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
     const fontFamily = theme.fontFamily || 'Arial, sans-serif';
 
     // Determine block order if blocks exist
-    const blockOrder = tpl.blocks?.filter(b => b.visible).map(b => b.type) || null;
+    const blockOrder = tpl.blocks?.filter(b => b?.visible).map(b => b?.type) || null;
 
     const calculateCoreAverage = () => {
         const coreGrades = subjectGrades.filter(g => coreSubjectNames.includes(g.subject));
@@ -330,14 +352,14 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
 
             {/* Student Info */}
             <div className="grid grid-cols-4 gap-2 text-xs mb-3 border border-gray-300 p-2">
-                <div><strong>Surname:</strong> {student.last_name}</div>
-                <div><strong>First Name:</strong> {student.first_name} {student.middle_name || ''}</div>
-                <div><strong>Date of Birth:</strong> {student.date_of_birth}</div>
-                <div><strong>Age:</strong> {student.age} years</div>
+                <div><strong>Surname:</strong> {student?.last_name || '-'}</div>
+                <div><strong>First Name:</strong> {student?.first_name || '-'} {student?.middle_name || ''}</div>
+                <div><strong>Date of Birth:</strong> {student?.date_of_birth || '-'}</div>
+                <div><strong>Age:</strong> {student?.age ? `${student.age} years` : '-'}</div>
                 <div><strong>Grade:</strong> {classInfo?.grade_level || '-'}</div>
-                <div><strong>Gender:</strong> {student.gender}</div>
-                <div><strong>House:</strong> {student.house || '-'}</div>
-                <div><strong>Student ID:</strong> {student.student_id || '-'}</div>
+                <div><strong>Gender:</strong> {student?.gender || '-'}</div>
+                <div><strong>House:</strong> {student?.house || '-'}</div>
+                <div><strong>Student ID:</strong> {student?.student_id || '-'}</div>
             </div>
 
             {/* Term & Attendance Info */}
@@ -384,7 +406,8 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
                     </thead>
                     <tbody>
                         {subjectNames.map((subject, idx) => {
-                            const subjectData = subjectGrades.find(g => g.subject === subject) || {};
+                            if (!subject) return null;
+                            const subjectData = subjectGrades.find(g => g?.subject === subject) || {};
                             let displayScore;
                             if (useWeighted) {
                                 displayScore = subjectData.score || calcWeightedFromTemplate({
@@ -395,12 +418,12 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
                             } else {
                                 displayScore = subjectData.score || 0;
                             }
-                            const gradeInfo = getGradeFromScale(displayScore, gradeScale);
+                            const gradeInfo = getGradeFromScale(displayScore, gradeScale) || { grade: '-' };
                             const achievement = getAchievementFromScale(subjectData.endOfTerm, achievementStds);
                             const isCore = coreSubjectNames.includes(subject);
 
                             return (
-                                <tr key={subject} className={isCore ? 'bg-blue-50' : (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
+                                <tr key={`${subject}-${idx}`} className={isCore ? 'bg-blue-50' : (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
                                     <td className="border border-gray-400 p-1 font-medium">
                                         {subject}{isCore && <span style={{ color: headerBg }}>*</span>}
                                     </td>
@@ -417,7 +440,7 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
                                     ) : (
                                         <td className="border border-gray-400 p-1 text-center font-bold">{displayScore > 0 ? Math.round(displayScore) : '-'}</td>
                                     )}
-                                    <td className="border border-gray-400 p-1 text-center font-bold">{gradeInfo.grade}</td>
+                                    <td className="border border-gray-400 p-1 text-center font-bold">{gradeInfo?.grade || '-'}</td>
                                     {sections.achievement_standards !== false && achievementStds.length > 0 && (
                                         <td className="border border-gray-400 p-1 text-center text-xs">{achievement?.band || '-'}</td>
                                     )}
@@ -485,31 +508,37 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
                 <div className="mb-4">
                     <h3 className="text-sm font-bold p-1 mb-0" style={{ backgroundColor: headerBg, color: headerText }}>PROGRESS IN SOCIAL SKILLS AND ATTITUDES</h3>
                     <div className={`grid gap-4 text-xs border border-gray-300 p-2`} style={{ gridTemplateColumns: `repeat(${Math.min(socialCategories.length, 2)}, 1fr)` }}>
-                        {socialCategories.map(cat => (
-                            <div key={cat.category_name}>
-                                <h4 className="font-bold mb-1 uppercase">{cat.category_name}</h4>
-                                <table className="w-full">
-                                    <tbody>
-                                        {cat.skills.map(skill => (
-                                            <tr key={skill}>
-                                                <td className="py-0.5">{skill}</td>
-                                                <td className="py-0.5 text-right">
-                                                    {skillRatings.map(rating => (
-                                                        <span key={rating} className="inline-block w-4 h-4 border border-gray-400 mx-0.5 text-center text-xs">
-                                                            {social_skills?.[skill] === rating ? '✓' : ''}
-                                                        </span>
-                                                    ))}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ))}
+                        {socialCategories.map((cat, catIdx) => {
+                            if (!cat || !cat.category_name) return null;
+                            return (
+                                <div key={`${cat.category_name}-${catIdx}`}>
+                                    <h4 className="font-bold mb-1 uppercase">{cat.category_name}</h4>
+                                    <table className="w-full">
+                                        <tbody>
+                                            {(cat.skills || []).map((skill, skillIdx) => {
+                                                if (!skill) return null;
+                                                return (
+                                                    <tr key={`${skill}-${skillIdx}`}>
+                                                        <td className="py-0.5">{skill}</td>
+                                                        <td className="py-0.5 text-right">
+                                                            {(Array.isArray(skillRatings) ? skillRatings : []).map((rating, rIdx) => (
+                                                                <span key={`${rating}-${rIdx}`} className="inline-block w-4 h-4 border border-gray-400 mx-0.5 text-center text-xs">
+                                                                    {social_skills?.[skill] === rating ? '✓' : ''}
+                                                                </span>
+                                                            ))}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            );
+                        })}
                     </div>
                     <div className="mt-1 text-xs text-gray-500 flex gap-3">
-                        {skillRatings.map((r, i) => (
-                            <span key={r}>{r[0]} = {r}</span>
+                        {(Array.isArray(skillRatings) ? skillRatings : []).map((r, i) => (
+                            <span key={`rating-${i}`}>{typeof r === 'string' ? `${r[0]} = ${r}` : r?.code ? `${r.code} = ${r.label}` : ''}</span>
                         ))}
                     </div>
                 </div>
@@ -520,7 +549,7 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
                 <div className="mb-4">
                     <h3 className="text-sm font-bold p-1 mb-0" style={{ backgroundColor: headerBg, color: headerText }}>CLASS TEACHER'S COMMENTS</h3>
                     <div className="border border-gray-300 p-2 min-h-16 text-sm">
-                        {student.teacher_comment || 'No comments recorded.'}
+                        {student?.teacher_comment || 'No comments recorded.'}
                     </div>
                 </div>
             )}
