@@ -114,6 +114,11 @@ class UserRole:
     TEACHER = "teacher"
     PARENT = "parent"
 
+class SchoolSubject(BaseModel):
+    name: str
+    is_core: bool = False
+    order: int = 0
+
 class AcademicYear(BaseModel):
     year: str  # e.g., "2025-2026"
     terms: List[str] = ["Term 1", "Term 2", "Term 3"]
@@ -132,6 +137,7 @@ class SchoolBase(BaseModel):
     principal_signature: Optional[str] = ""
     teacher_signature: Optional[str] = ""
     academic_years: List[AcademicYear] = []
+    subjects: List[SchoolSubject] = []
 
 class SchoolCreate(SchoolBase):
     pass
@@ -692,6 +698,21 @@ async def create_school(school: SchoolCreate, current_user: dict = Depends(requi
             AcademicYear(year="2024-2025", terms=["Term 1", "Term 2", "Term 3"], is_enabled=False, is_current=False)
         ]
     
+    # Set default subjects if not provided
+    if not school.subjects:
+        school.subjects = [
+            SchoolSubject(name="English Language", is_core=True, order=1),
+            SchoolSubject(name="Mathematics", is_core=True, order=2),
+            SchoolSubject(name="Science", is_core=True, order=3),
+            SchoolSubject(name="Social Studies", is_core=True, order=4),
+            SchoolSubject(name="Religious Education", is_core=False, order=5),
+            SchoolSubject(name="Physical Education", is_core=False, order=6),
+            SchoolSubject(name="Creative Arts", is_core=False, order=7),
+            SchoolSubject(name="Music", is_core=False, order=8),
+            SchoolSubject(name="ICT", is_core=False, order=9),
+            SchoolSubject(name="French", is_core=False, order=10)
+        ]
+    
     doc = {
         "id": school_id,
         **school.model_dump(),
@@ -902,6 +923,98 @@ async def get_school_signatures(
         "principal_signature": school.get("principal_signature", ""),
         "teacher_signature": school.get("teacher_signature", "")
     }
+
+
+# ==================== SCHOOL SUBJECTS MANAGEMENT ====================
+
+@api_router.get("/schools/{school_id}/subjects")
+async def get_school_subjects(
+    school_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get subjects for a school"""
+    school = await db.schools.find_one({"id": school_id}, {"_id": 0})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    
+    return {"subjects": school.get("subjects", [])}
+
+@api_router.put("/schools/{school_id}/subjects")
+async def update_school_subjects(
+    school_id: str,
+    subjects: List[SchoolSubject],
+    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN]))
+):
+    """Update subjects for a school"""
+    school = await db.schools.find_one({"id": school_id})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    
+    # Convert subjects to dict format
+    subjects_data = [subj.model_dump() for subj in subjects]
+    
+    await db.schools.update_one(
+        {"id": school_id},
+        {"$set": {"subjects": subjects_data}}
+    )
+    
+    # Also update the report template for this school
+    await db.report_templates.update_one(
+        {"school_code": school["school_code"]},
+        {"$set": {"subjects": [{"name": s["name"], "is_core": s["is_core"]} for s in subjects_data]}}
+    )
+    
+    return {"message": "Subjects updated successfully", "subjects": subjects_data}
+
+@api_router.post("/schools/{school_id}/subjects")
+async def add_school_subject(
+    school_id: str,
+    subject: SchoolSubject,
+    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN]))
+):
+    """Add a new subject to a school"""
+    school = await db.schools.find_one({"id": school_id})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    
+    subjects = school.get("subjects", [])
+    
+    # Check if subject already exists
+    if any(s.get("name") == subject.name for s in subjects):
+        raise HTTPException(status_code=400, detail="Subject already exists")
+    
+    # Add new subject
+    subject_data = subject.model_dump()
+    subjects.append(subject_data)
+    
+    await db.schools.update_one(
+        {"id": school_id},
+        {"$set": {"subjects": subjects}}
+    )
+    
+    return {"message": "Subject added", "subject": subject_data}
+
+@api_router.delete("/schools/{school_id}/subjects/{subject_name}")
+async def delete_school_subject(
+    school_id: str,
+    subject_name: str,
+    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN]))
+):
+    """Delete a subject from a school"""
+    school = await db.schools.find_one({"id": school_id})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    
+    subjects = school.get("subjects", [])
+    subjects = [s for s in subjects if s.get("name") != subject_name]
+    
+    await db.schools.update_one(
+        {"id": school_id},
+        {"$set": {"subjects": subjects}}
+    )
+    
+    return {"message": f"Subject '{subject_name}' deleted"}
+
 
 # ==================== REPORT TEMPLATES (Superuser Only) ====================
 

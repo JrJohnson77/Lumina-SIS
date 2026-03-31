@@ -13,7 +13,7 @@ import ReportTemplateDesigner from './ReportTemplateDesigner';
 import {
     Plus, Edit2, Trash2, Building2, Loader2, Save, ArrowLeft,
     BookOpen, Award, Heart, Users as UsersIcon, Settings, Palette,
-    ChevronDown, ChevronRight
+    ChevronDown, ChevronRight, ChevronUp, Info
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -79,6 +79,13 @@ export default function SchoolsPage() {
     const [currentAcademicYear, setCurrentAcademicYear] = useState('2025-2026');
     const [newYear, setNewYear] = useState('');
     const [savingYear, setSavingYear] = useState(false);
+
+    // Subjects state
+    const [schoolSubjects, setSchoolSubjects] = useState([]);
+    const [newSubjectName, setNewSubjectName] = useState('');
+    const [newSubjectIsCore, setNewSubjectIsCore] = useState(false);
+    const [savingSubject, setSavingSubject] = useState(false);
+    const [editingSubjectIndex, setEditingSubjectIndex] = useState(null);
 
     useEffect(() => { fetchSchools(); }, []);
 
@@ -342,11 +349,78 @@ export default function SchoolsPage() {
         }
     };
 
-    // Update handleEdit to fetch signatures and academic years
+
+    // ========== SUBJECTS MANAGEMENT FUNCTIONS ==========
+    const fetchSchoolSubjects = async (schoolId) => {
+        try {
+            const res = await axios.get(`${API}/schools/${schoolId}/subjects`);
+            setSchoolSubjects(res.data.subjects || []);
+        } catch (error) {
+            console.error('Failed to fetch subjects');
+        }
+    };
+
+    const handleUpdateSubjects = async () => {
+        if (!editingSchool) return;
+        setSavingSubject(true);
+        try {
+            await axios.put(`${API}/schools/${editingSchool.id}/subjects`, schoolSubjects);
+            toast.success('Subjects updated successfully');
+            fetchSchoolSubjects(editingSchool.id);
+        } catch (error) {
+            toast.error('Failed to update subjects');
+        } finally {
+            setSavingSubject(false);
+        }
+    };
+
+    const handleAddSubject = () => {
+        if (!newSubjectName.trim()) return;
+        
+        const newSubject = {
+            name: newSubjectName.trim(),
+            is_core: newSubjectIsCore,
+            order: schoolSubjects.length + 1
+        };
+        
+        setSchoolSubjects([...schoolSubjects, newSubject]);
+        setNewSubjectName('');
+        setNewSubjectIsCore(false);
+    };
+
+    const handleDeleteSubject = (index) => {
+        const updated = schoolSubjects.filter((_, i) => i !== index);
+        setSchoolSubjects(updated);
+    };
+
+    const handleToggleCore = (index) => {
+        const updated = [...schoolSubjects];
+        updated[index].is_core = !updated[index].is_core;
+        setSchoolSubjects(updated);
+    };
+
+    const handleReorderSubject = (index, direction) => {
+        if ((direction === 'up' && index === 0) || (direction === 'down' && index === schoolSubjects.length - 1)) return;
+        
+        const updated = [...schoolSubjects];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        [updated[index], updated[targetIndex]] = [updated[targetIndex], updated[index]];
+        
+        // Update order numbers
+        updated.forEach((subj, i) => {
+            subj.order = i + 1;
+        });
+        
+        setSchoolSubjects(updated);
+    };
+
+
+    // Update handleEdit to fetch signatures, academic years, and subjects
     useEffect(() => {
         if (editingSchool) {
             fetchSignatures(editingSchool.id);
             fetchSchoolDetails(editingSchool.id);
+            fetchSchoolSubjects(editingSchool.id);
         }
     }, [editingSchool]);
 
@@ -374,6 +448,7 @@ export default function SchoolsPage() {
                         <TabsTrigger value="basic" className="rounded-md text-sm">Basic Info</TabsTrigger>
                         {(editingSchool || formData.school_code) && (
                             <>
+                                <TabsTrigger value="subjects" className="rounded-md text-sm">Subjects</TabsTrigger>
                                 <TabsTrigger value="signatures" className="rounded-md text-sm">Signatures</TabsTrigger>
                                 <TabsTrigger value="academic-years" className="rounded-md text-sm">Academic Years</TabsTrigger>
                                 <TabsTrigger value="gradebook" className="rounded-md text-sm">Gradebook Settings</TabsTrigger>
@@ -426,6 +501,146 @@ export default function SchoolsPage() {
                     </TabsContent>
 
 
+
+
+
+                    {/* ===== SUBJECTS TAB ===== */}
+                    <TabsContent value="subjects">
+                        <Card className="rounded-2xl border-border/50">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <BookOpen className="w-5 h-5" />
+                                    School Subjects
+                                </CardTitle>
+                                <p className="text-sm text-muted-foreground">Define unique subjects for grading and report cards. Mark core subjects for ranking calculations.</p>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {/* Add New Subject */}
+                                <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                                    <h4 className="font-medium mb-3">Add New Subject</h4>
+                                    <div className="flex gap-3 items-end">
+                                        <div className="flex-1">
+                                            <Label className="text-sm mb-1">Subject Name</Label>
+                                            <Input
+                                                placeholder="e.g., Computer Science"
+                                                value={newSubjectName}
+                                                onChange={(e) => setNewSubjectName(e.target.value)}
+                                                className="rounded-lg"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Switch
+                                                checked={newSubjectIsCore}
+                                                onCheckedChange={setNewSubjectIsCore}
+                                            />
+                                            <Label className="text-sm">Core Subject</Label>
+                                        </div>
+                                        <Button 
+                                            onClick={handleAddSubject}
+                                            disabled={!newSubjectName.trim()}
+                                            className="rounded-lg"
+                                        >
+                                            <Plus className="w-4 h-4 mr-2" />
+                                            Add
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Subjects List */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm font-medium">Configured Subjects ({schoolSubjects.length})</Label>
+                                        <Button
+                                            onClick={handleUpdateSubjects}
+                                            disabled={savingSubject || schoolSubjects.length === 0}
+                                            className="rounded-lg"
+                                        >
+                                            {savingSubject ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                            Save Changes
+                                        </Button>
+                                    </div>
+
+                                    {schoolSubjects.length === 0 ? (
+                                        <div className="text-center py-8 text-muted-foreground">
+                                            <BookOpen className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                                            <p>No subjects configured. Add your first subject above.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {schoolSubjects.map((subject, index) => (
+                                                <div 
+                                                    key={index}
+                                                    className={`p-3 rounded-lg border ${subject.is_core ? 'bg-primary/5 border-primary/30' : 'bg-muted/30 border-border'}`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex flex-col gap-1">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    onClick={() => handleReorderSubject(index, 'up')}
+                                                                    disabled={index === 0}
+                                                                    className="h-5 w-5 p-0"
+                                                                >
+                                                                    <ChevronUp className="w-3 h-3" />
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    onClick={() => handleReorderSubject(index, 'down')}
+                                                                    disabled={index === schoolSubjects.length - 1}
+                                                                    className="h-5 w-5 p-0"
+                                                                >
+                                                                    <ChevronDown className="w-3 h-3" />
+                                                                </Button>
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium">{subject.name}</p>
+                                                                {subject.is_core && (
+                                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                                                                        Core Subject
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleToggleCore(index)}
+                                                                className="rounded-lg"
+                                                            >
+                                                                {subject.is_core ? 'Mark as Elective' : 'Mark as Core'}
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="destructive"
+                                                                onClick={() => handleDeleteSubject(index)}
+                                                                className="rounded-lg"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Info Box */}
+                                <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                                    <div className="flex gap-2">
+                                        <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                                        <div className="text-sm text-blue-900">
+                                            <p className="font-medium mb-1">About Core Subjects</p>
+                                            <p className="text-blue-700">Core subjects are used for class ranking and overall performance calculations. Mark important subjects like Math, English, and Science as core.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
 
                     {/* ===== SIGNATURES TAB ===== */}
                     <TabsContent value="signatures">
