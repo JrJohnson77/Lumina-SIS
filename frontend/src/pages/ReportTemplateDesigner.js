@@ -306,7 +306,8 @@ const DataFieldPicker = ({ field, onChange, template }) => {
         }
     };
     
-    const schoolSubjects = template?.subjects?.map(s => s.name) || [
+    // Safely get subjects from template or use defaults
+    const schoolSubjects = (template?.subjects && Array.isArray(template.subjects) ? template.subjects.map(s => s?.name).filter(Boolean) : null) || [
         'English Language', 'Mathematics', 'Science', 'Social Studies',
         'Religious Education', 'Physical Education', 'Creative Arts', 'Music', 'ICT', 'French'
     ];
