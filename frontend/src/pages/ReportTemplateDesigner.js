@@ -307,10 +307,22 @@ const DataFieldPicker = ({ field, onChange, template }) => {
     };
     
     // Safely get subjects from template or use defaults
-    const schoolSubjects = (template?.subjects && Array.isArray(template.subjects) ? template.subjects.map(s => s?.name).filter(Boolean) : null) || [
-        'English Language', 'Mathematics', 'Science', 'Social Studies',
-        'Religious Education', 'Physical Education', 'Creative Arts', 'Music', 'ICT', 'French'
-    ];
+    const schoolSubjects = useMemo(() => {
+        if (!template) return [
+            'English Language', 'Mathematics', 'Science', 'Social Studies',
+            'Religious Education', 'Physical Education', 'Creative Arts', 'Music', 'ICT', 'French'
+        ];
+        
+        if (template.subjects && Array.isArray(template.subjects)) {
+            const mapped = template.subjects.map(s => s?.name).filter(Boolean);
+            if (mapped.length > 0) return mapped;
+        }
+        
+        return [
+            'English Language', 'Mathematics', 'Science', 'Social Studies',
+            'Religious Education', 'Physical Education', 'Creative Arts', 'Music', 'ICT', 'French'
+        ];
+    }, [template]);
     
     return (
         <div className="space-y-1">
