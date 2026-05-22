@@ -71,6 +71,8 @@ Rebranded from "EduManager" to "Lumina-SIS" with a modern, sleek UI redesign.
 - [ ] Tech-debt: split server.py (~3k lines) into routers by module
 
 ## Changelog
+- **Feb 2026 (Session 16 — Teacher class scope)**: Teachers now only see students assigned to classes they teach or created across ALL relevant endpoints — `/api/students` (list + by-id), `/api/attendance`, `/api/gradebook`, `/api/health/{id}`, `/api/discipline` (list, get, create, update). Admins/superusers unchanged. New helpers `get_teacher_class_ids()`, `get_teacher_student_ids()`, `_ensure_teacher_can_access_student()` keep this consistent. Verified: SUNF admin sees 147 students; teacher sarah.thompson.sunf sees only 25 from her 2 classes; cross-class access returns 403 "Student is not in your class".
+
 - **Feb 2026 (Session 15 — 6-step audit)**: 
   - **Backend APIs**: Full CRUD + Stats for Admissions (`/api/admissions`), Health (`/api/health/{student_id}/...` for vaccinations/allergies/conditions/medications/visits) and Discipline (`/api/discipline`). Re-Enrollment endpoints (`/api/enrollment/preview`, `/api/enrollment/execute`) with promote/retain/graduate/withdraw flow. All endpoints documented inline (method, path, required role).
   - **RBAC Audit**: Added `assert_school_tenant()` helper; closed cross-tenant gaps on `/api/schools`, `/api/schools/{id}/{academic-years,signatures,subjects}`, and `/api/report-templates/{code}`. `/api/schools` now returns the admin's own school only (was superuser-only). All role violations return **403** (not 401).

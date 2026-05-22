@@ -582,6 +582,33 @@ async def assert_school_tenant(school_id: str, current_user: dict) -> dict:
         raise HTTPException(status_code=403, detail="Cross-tenant access denied")
     return school
 
+
+async def get_teacher_class_ids(current_user: dict) -> List[str]:
+    """Return all class ids the teacher teaches OR created within their school."""
+    classes = await db.classes.find(
+        {
+            "school_code": current_user["school_code"],
+            "$or": [
+                {"teacher_id": current_user["id"]},
+                {"created_by": current_user["id"]},
+            ],
+        },
+        {"_id": 0, "id": 1},
+    ).to_list(1000)
+    return [c["id"] for c in classes]
+
+
+async def get_teacher_student_ids(current_user: dict) -> List[str]:
+    """Return ids of students assigned to any class this teacher teaches."""
+    class_ids = await get_teacher_class_ids(current_user)
+    if not class_ids:
+        return []
+    students = await db.students.find(
+        {"school_code": current_user["school_code"], "class_id": {"$in": class_ids}},
+        {"_id": 0, "id": 1},
+    ).to_list(5000)
+    return [s["id"] for s in students]
+
 # ==================== STARTUP - Create Superuser ====================
 
 @app.on_event("startup")
@@ -1277,6 +1304,17 @@ async def get_students(
     
     if current_user["role"] == UserRole.PARENT:
         query["parent_id"] = current_user["id"]
+    elif current_user["role"] == UserRole.TEACHER:
+        # Teachers can only see students assigned to classes they teach/created
+        teacher_class_ids = await get_teacher_class_ids(current_user)
+        if not teacher_class_ids:
+            return []
+        if class_id:
+            # If filtering by class_id, ensure it's one of the teacher's classes
+            if class_id not in teacher_class_ids:
+                return []
+        else:
+            query["class_id"] = {"$in": teacher_class_ids}
     
     students = await db.students.find(query, {"_id": 0}).to_list(1000)
     
@@ -1294,6 +1332,11 @@ async def get_student(student_id: str, current_user: dict = Depends(get_current_
     
     if current_user["role"] == UserRole.PARENT and student.get("parent_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="Access denied")
+    
+    if current_user["role"] == UserRole.TEACHER:
+        teacher_class_ids = await get_teacher_class_ids(current_user)
+        if student.get("class_id") not in teacher_class_ids:
+            raise HTTPException(status_code=403, detail="Student is not in your class")
     
     student["age"] = calculate_age(student.get("date_of_birth", ""))
     return StudentResponse(**student)
@@ -1482,6 +1525,16 @@ async def get_attendance(
         ).to_list(100)
         child_ids = [c["id"] for c in children]
         query["student_id"] = {"$in": child_ids}
+    elif current_user["role"] == UserRole.TEACHER:
+        teacher_class_ids = await get_teacher_class_ids(current_user)
+        if not teacher_class_ids:
+            return []
+        # If a specific class was requested, ensure it's one of the teacher's
+        if class_id and class_id not in teacher_class_ids:
+            return []
+        # If no class specified, restrict to all teacher classes
+        if not class_id:
+            query["class_id"] = {"$in": teacher_class_ids}
     
     attendance = await db.attendance.find(query, {"_id": 0}).to_list(10000)
     return [AttendanceResponse(**a) for a in attendance]
@@ -1654,6 +1707,14 @@ async def get_gradebook(
         ).to_list(100)
         child_ids = [c["id"] for c in children]
         query["student_id"] = {"$in": child_ids}
+    elif current_user["role"] == UserRole.TEACHER:
+        teacher_class_ids = await get_teacher_class_ids(current_user)
+        if not teacher_class_ids:
+            return []
+        if class_id and class_id not in teacher_class_ids:
+            return []
+        if not class_id:
+            query["class_id"] = {"$in": teacher_class_ids}
     
     entries = await db.gradebook.find(query, {"_id": 0}).to_list(1000)
     return [GradebookResponse(**e) for e in entries]
@@ -2429,6 +2490,17 @@ async def _ensure_student_in_school(student_id: str, school_code: str) -> dict:
     return student
 
 
+async def _ensure_teacher_can_access_student(student_id: str, current_user: dict) -> dict:
+    """Same as _ensure_student_in_school but additionally enforces that, for teachers,
+    the student belongs to one of their classes. Admins/superusers bypass the class check."""
+    student = await _ensure_student_in_school(student_id, current_user["school_code"])
+    if current_user["role"] == UserRole.TEACHER:
+        teacher_class_ids = await get_teacher_class_ids(current_user)
+        if student.get("class_id") not in teacher_class_ids:
+            raise HTTPException(status_code=403, detail="Student is not in your class")
+    return student
+
+
 async def _get_or_create_health_record(student_id: str, school_code: str) -> dict:
     rec = await db.health_records.find_one({"student_id": student_id, "school_code": school_code}, {"_id": 0})
     if rec:
@@ -2487,8 +2559,9 @@ async def health_stats(current_user: dict = Depends(require_roles(HEALTH_ROLES))
 async def get_health_record(
     student_id: str, current_user: dict = Depends(require_roles(HEALTH_ROLES))
 ):
-    """GET /api/health/{student_id} — fetch (creates empty record if missing). Role: admin/teacher."""
-    await _ensure_student_in_school(student_id, current_user["school_code"])
+    """GET /api/health/{student_id} — fetch (creates empty record if missing). Role: admin/teacher.
+    Teachers may only access students assigned to their classes."""
+    await _ensure_teacher_can_access_student(student_id, current_user)
     rec = await _get_or_create_health_record(student_id, current_user["school_code"])
     rec.pop("_id", None)
     return HealthRecordResponse(**rec)
@@ -2515,8 +2588,9 @@ async def add_vaccination(
     payload: HealthVaccination,
     current_user: dict = Depends(require_roles(HEALTH_ROLES)),
 ):
-    """POST /api/health/{student_id}/vaccination — append a vaccination. Role: admin/teacher."""
-    await _ensure_student_in_school(student_id, current_user["school_code"])
+    """POST /api/health/{student_id}/vaccination — append a vaccination. Role: admin/teacher.
+    Teachers may only modify records for students in their classes."""
+    await _ensure_teacher_can_access_student(student_id, current_user)
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "vaccinations", payload.model_dump()
     )
@@ -2530,7 +2604,7 @@ async def add_allergy(
     current_user: dict = Depends(require_roles(HEALTH_ROLES)),
 ):
     """POST /api/health/{student_id}/allergy — append an allergy. Role: admin/teacher."""
-    await _ensure_student_in_school(student_id, current_user["school_code"])
+    await _ensure_teacher_can_access_student(student_id, current_user)
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "allergies", payload.model_dump()
     )
@@ -2544,7 +2618,7 @@ async def add_condition(
     current_user: dict = Depends(require_roles(HEALTH_ROLES)),
 ):
     """POST /api/health/{student_id}/condition — append a condition. Role: admin/teacher."""
-    await _ensure_student_in_school(student_id, current_user["school_code"])
+    await _ensure_teacher_can_access_student(student_id, current_user)
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "conditions", payload.model_dump()
     )
@@ -2558,7 +2632,7 @@ async def add_medication(
     current_user: dict = Depends(require_roles(HEALTH_ROLES)),
 ):
     """POST /api/health/{student_id}/medication — append a medication. Role: admin/teacher."""
-    await _ensure_student_in_school(student_id, current_user["school_code"])
+    await _ensure_teacher_can_access_student(student_id, current_user)
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "medications", payload.model_dump()
     )
@@ -2572,7 +2646,7 @@ async def add_visit(
     current_user: dict = Depends(require_roles(HEALTH_ROLES)),
 ):
     """POST /api/health/{student_id}/visit — append a clinic visit. Role: admin/teacher."""
-    await _ensure_student_in_school(student_id, current_user["school_code"])
+    await _ensure_teacher_can_access_student(student_id, current_user)
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "visits", payload.model_dump()
     )
@@ -2590,7 +2664,7 @@ async def delete_health_entry(
     list_key = HEALTH_LIST_KEYS.get(entry_type)
     if not list_key:
         raise HTTPException(status_code=400, detail="Invalid entry type")
-    await _ensure_student_in_school(student_id, current_user["school_code"])
+    await _ensure_teacher_can_access_student(student_id, current_user)
     now = datetime.now(timezone.utc).isoformat()
     result = await db.health_records.update_one(
         {"student_id": student_id, "school_code": current_user["school_code"]},
@@ -2654,23 +2728,11 @@ async def discipline_stats(current_user: dict = Depends(require_roles(DISCIPLINE
 
 @api_router.get("/discipline", response_model=List[DisciplineResponse])
 async def list_discipline(current_user: dict = Depends(require_roles(DISCIPLINE_ROLES))):
-    """GET /api/discipline — list incidents (school-scoped). Role: admin/teacher."""
+    """GET /api/discipline — list incidents (school-scoped). Role: admin/teacher.
+    Teachers only see incidents they reported or that involve students in their classes."""
     q = {"school_code": current_user["school_code"]}
-    # Teachers only see incidents they reported OR for students in their classes
     if current_user["role"] == UserRole.TEACHER:
-        # Get class ids where this teacher is teacher
-        classes = await db.classes.find(
-            {"school_code": current_user["school_code"], "teacher_id": current_user["id"]},
-            {"_id": 0, "id": 1},
-        ).to_list(1000)
-        class_ids = [c["id"] for c in classes]
-        student_ids = []
-        if class_ids:
-            students = await db.students.find(
-                {"school_code": current_user["school_code"], "class_id": {"$in": class_ids}},
-                {"_id": 0, "id": 1},
-            ).to_list(5000)
-            student_ids = [s["id"] for s in students]
+        student_ids = await get_teacher_student_ids(current_user)
         q["$or"] = [{"reported_by": current_user["id"]}, {"student_id": {"$in": student_ids}}]
     docs = await db.discipline_incidents.find(q, {"_id": 0}).sort("date", -1).to_list(2000)
     return [DisciplineResponse(**d) for d in docs]
@@ -2680,12 +2742,21 @@ async def list_discipline(current_user: dict = Depends(require_roles(DISCIPLINE_
 async def get_discipline(
     incident_id: str, current_user: dict = Depends(require_roles(DISCIPLINE_ROLES))
 ):
-    """GET /api/discipline/{id} — fetch one. Role: admin/teacher."""
+    """GET /api/discipline/{id} — fetch one. Role: admin/teacher.
+    Teachers can only fetch incidents involving students in their classes (or that they reported)."""
     doc = await db.discipline_incidents.find_one(
         {"id": incident_id, "school_code": current_user["school_code"]}, {"_id": 0}
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Incident not found")
+    if current_user["role"] == UserRole.TEACHER and doc.get("reported_by") != current_user["id"]:
+        teacher_class_ids = await get_teacher_class_ids(current_user)
+        student = await db.students.find_one(
+            {"id": doc.get("student_id"), "school_code": current_user["school_code"]},
+            {"_id": 0, "class_id": 1},
+        )
+        if not student or student.get("class_id") not in teacher_class_ids:
+            raise HTTPException(status_code=403, detail="Incident is not in your scope")
     return DisciplineResponse(**doc)
 
 
@@ -2694,8 +2765,9 @@ async def create_discipline(
     payload: DisciplineCreate, current_user: dict = Depends(require_roles(DISCIPLINE_ROLES))
 ):
     """POST /api/discipline — create an incident. Role: admin/teacher.
-    Validates the referenced student belongs to the same school."""
-    await _ensure_student_in_school(payload.student_id, current_user["school_code"])
+    Validates the referenced student belongs to the same school.
+    Teachers may only file incidents for students in their classes."""
+    await _ensure_teacher_can_access_student(payload.student_id, current_user)
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": str(uuid.uuid4()),
@@ -2717,12 +2789,13 @@ async def update_discipline(
     payload: DisciplineCreate,
     current_user: dict = Depends(require_roles(DISCIPLINE_ROLES)),
 ):
-    """PUT /api/discipline/{id} — update incident. Role: admin/teacher."""
+    """PUT /api/discipline/{id} — update incident. Role: admin/teacher.
+    Teachers may only update incidents for students in their classes."""
     query = {"id": incident_id, "school_code": current_user["school_code"]}
     existing = await db.discipline_incidents.find_one(query, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Incident not found")
-    await _ensure_student_in_school(payload.student_id, current_user["school_code"])
+    await _ensure_teacher_can_access_student(payload.student_id, current_user)
     now = datetime.now(timezone.utc).isoformat()
     await db.discipline_incidents.update_one(
         query, {"$set": {**payload.model_dump(), "updated_at": now}}
