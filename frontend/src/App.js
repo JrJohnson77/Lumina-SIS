@@ -9,6 +9,7 @@ import StudentsPage from "./pages/StudentsPage";
 import ClassesPage from "./pages/ClassesPage";
 import AttendancePage from "./pages/AttendancePage";
 import GradebookPage from "./pages/GradebookPage";
+import GradesPage from "./pages/GradesPage";
 import ReportsPage from "./pages/ReportsPage";
 import UsersPage from "./pages/UsersPage";
 import ImportExportPage from "./pages/ImportExportPage";
@@ -116,6 +117,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <GradebookPage />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/grades" 
+                element={
+                    <ProtectedRoute allowedRoles={['superuser', 'admin', 'teacher']}>
+                        <GradesPage />
                     </ProtectedRoute>
                 } 
             />
