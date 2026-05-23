@@ -33,6 +33,7 @@ import {
     AlertTriangle,
     RefreshCw,
     Settings,
+    History,
 } from 'lucide-react';
 
 const SIDEBAR_STORAGE_KEY = 'lumina_sidebar_open_groups';
@@ -95,6 +96,7 @@ const NAV_GROUPS = [
             { to: '/schools', label: 'Schools', icon: Building2, roles: ['superuser'] },
             { to: '/import-export', label: 'Import / Export', icon: FolderInput, roles: ['superuser', 'admin'] },
             { to: '/report-template', label: 'Report Designer', icon: FileText, roles: ['superuser'] },
+            { to: '/audit-logs', label: 'Audit Log', icon: History, roles: ['superuser', 'admin'] },
         ],
     },
 ];

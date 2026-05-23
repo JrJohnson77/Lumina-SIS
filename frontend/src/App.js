@@ -1,11 +1,15 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Layout } from "./components/Layout";
+import { SessionExpiredModal } from "./components/SessionExpiredModal";
 import LoginPage from "./pages/LoginPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import SchoolsPage from "./pages/SchoolsPage";
 import StudentsPage from "./pages/StudentsPage";
+import StudentProfilePage from "./pages/StudentProfilePage";
 import ClassesPage from "./pages/ClassesPage";
 import AttendancePage from "./pages/AttendancePage";
 import GradebookPage from "./pages/GradebookPage";
@@ -18,7 +22,18 @@ import AdmissionsPage from "./pages/AdmissionsPage";
 import HealthPage from "./pages/HealthPage";
 import DisciplinePage from "./pages/DisciplinePage";
 import ReEnrollmentPage from "./pages/ReEnrollmentPage";
+import AuditLogPage from "./pages/AuditLogPage";
 import { Loader2 } from "lucide-react";
+
+// Listens to route changes and persists the path for the next login redirect
+const RouteWatcher = () => {
+    const location = useLocation();
+    const { rememberLastPage, isAuthenticated } = useAuth();
+    useEffect(() => {
+        if (isAuthenticated) rememberLastPage(location.pathname);
+    }, [location.pathname, isAuthenticated, rememberLastPage]);
+    return null;
+};
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
     const { isAuthenticated, loading, user } = useAuth();
@@ -67,12 +82,23 @@ const PublicRoute = ({ children }) => {
 
 function AppRoutes() {
     return (
-        <Routes>
+        <>
+            <RouteWatcher />
+            <SessionExpiredModal />
+            <Routes>
             <Route 
                 path="/login" 
                 element={
                     <PublicRoute>
                         <LoginPage />
+                    </PublicRoute>
+                } 
+            />
+            <Route 
+                path="/forgot-password" 
+                element={
+                    <PublicRoute>
+                        <ForgotPasswordPage />
                     </PublicRoute>
                 } 
             />
@@ -97,6 +123,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <StudentsPage />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/students/:studentId" 
+                element={
+                    <ProtectedRoute>
+                        <StudentProfilePage />
                     </ProtectedRoute>
                 } 
             />
@@ -196,9 +230,18 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } 
             />
+            <Route 
+                path="/audit-logs" 
+                element={
+                    <ProtectedRoute allowedRoles={['superuser', 'admin']}>
+                        <AuditLogPage />
+                    </ProtectedRoute>
+                } 
+            />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        </>
     );
 }
 

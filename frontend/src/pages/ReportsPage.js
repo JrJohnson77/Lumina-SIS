@@ -13,8 +13,13 @@ import {
     Printer,
     Users,
     BookOpen,
-    Download
+    Download,
+    Send,
+    Eye,
+    Lock,
+    Unlock
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -784,6 +789,12 @@ export default function ReportsPage() {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [exportingPdf, setExportingPdf] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewSrc, setPreviewSrc] = useState('');
+    const [previewBuilding, setPreviewBuilding] = useState(false);
+    const [sending, setSending] = useState(false);
+    const [reportLocks, setReportLocks] = useState({}); // student_id -> lock
+    const [lockToggling, setLockToggling] = useState(false);
     const [activeTab, setActiveTab] = useState('class-list');
     const printRef = useRef();
     const { isAdmin, isTeacher, schoolCode } = useAuth();
@@ -925,6 +936,107 @@ export default function ReportsPage() {
         }
     };
 
+    const handlePreviewPdf = async () => {
+        if (!printRef.current) return;
+        setPreviewBuilding(true);
+        try {
+            const html2canvas = (await import('html2canvas')).default;
+            const { jsPDF } = await import('jspdf');
+            const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true, logging: false });
+            const pdf = new jsPDF('p', 'in', 'legal');
+            const imgWidth = 8.5;
+            const pageHeight = 14;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+            while (heightLeft > 0) {
+                position -= pageHeight;
+                pdf.addPage();
+                pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+            const blobUrl = pdf.output('bloburl');
+            setPreviewSrc(blobUrl.toString());
+            setPreviewOpen(true);
+        } catch (error) {
+            console.error('Preview error:', error);
+            toast.error('Failed to build preview');
+        } finally {
+            setPreviewBuilding(false);
+        }
+    };
+
+    const handleSendToParents = async () => {
+        setSending(true);
+        try {
+            // Dev mode — log payload + show success toast. Wire to /api/email in prod.
+            const payload = {
+                class_id: selectedClass,
+                class_name: classes.find((c) => c.id === selectedClass)?.name || '',
+                term: selectedTerm,
+                academic_year: selectedYear,
+                report_cards: (reportCards || []).map((r) => ({
+                    student_id: r.student_id,
+                    student_name: r.student_name,
+                })),
+            };
+            // eslint-disable-next-line no-console
+            console.info('[SEND-TO-PARENTS] (dev) payload:', payload);
+            await new Promise((res) => setTimeout(res, 400));
+            toast.success(`Queued ${payload.report_cards.length} report card(s) for delivery (dev mode).`);
+        } catch (_e) {
+            toast.error('Failed to queue delivery');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const fetchReportLocks = async () => {
+        if (!selectedClass) return;
+        try {
+            const res = await axios.get(`${API}/report-cards/locks`, {
+                params: { term: selectedTerm, academic_year: selectedYear },
+            });
+            const map = {};
+            for (const lock of res.data) map[lock.student_id] = lock;
+            setReportLocks(map);
+        } catch (_e) {
+            // ignore
+        }
+    };
+
+    useEffect(() => {
+        fetchReportLocks();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedClass, selectedTerm, selectedYear]);
+
+    const handleToggleLockAll = async () => {
+        if (!isAdmin || !reportCards || reportCards.length === 0) return;
+        setLockToggling(true);
+        try {
+            const lockedNow = reportCards.every((r) => reportLocks[r.student_id]);
+            for (const r of reportCards) {
+                if (lockedNow) {
+                    await axios.delete(`${API}/report-cards/${r.student_id}/lock`, {
+                        params: { term: selectedTerm, academic_year: selectedYear },
+                    });
+                } else {
+                    await axios.post(`${API}/report-cards/${r.student_id}/lock`, null, {
+                        params: { term: selectedTerm, academic_year: selectedYear },
+                    });
+                }
+            }
+            toast.success(lockedNow ? 'Report cards unlocked' : 'Report cards locked');
+            fetchReportLocks();
+        } catch (error) {
+            toast.error(error?.response?.data?.detail || 'Failed to toggle lock');
+        } finally {
+            setLockToggling(false);
+        }
+    };
+
     const selectedClassInfo = classes.find(c => c.id === selectedClass);
     const classStudents = students.filter(s => s.class_id === selectedClass);
 
@@ -1035,6 +1147,26 @@ export default function ReportsPage() {
                                     <>
                                         <Button
                                             variant="outline"
+                                            onClick={handlePreviewPdf}
+                                            disabled={previewBuilding}
+                                            className="rounded-full"
+                                            data-testid="preview-report-btn"
+                                        >
+                                            {previewBuilding ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />}
+                                            Preview
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleExportPdf}
+                                            disabled={exportingPdf}
+                                            className="rounded-full"
+                                            data-testid="export-pdf-btn"
+                                        >
+                                            {exportingPdf ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                                            Export PDF
+                                        </Button>
+                                        <Button
+                                            variant="outline"
                                             onClick={handlePrint}
                                             className="rounded-full"
                                             data-testid="print-report-btn"
@@ -1042,6 +1174,38 @@ export default function ReportsPage() {
                                             <Printer className="w-4 h-4 mr-2" />
                                             Print
                                         </Button>
+                                        {activeTab === 'term-reports' && reportCards.length > 0 && (
+                                            <>
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={handleSendToParents}
+                                                    disabled={sending}
+                                                    className="rounded-full"
+                                                    data-testid="send-to-parents-btn"
+                                                >
+                                                    {sending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                                                    Send to parents
+                                                </Button>
+                                                {isAdmin && (
+                                                    <Button
+                                                        variant="outline"
+                                                        onClick={handleToggleLockAll}
+                                                        disabled={lockToggling}
+                                                        className="rounded-full"
+                                                        data-testid="lock-report-cards-btn"
+                                                    >
+                                                        {lockToggling ? (
+                                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                        ) : reportCards.every((r) => reportLocks[r.student_id]) ? (
+                                                            <Unlock className="w-4 h-4 mr-2" />
+                                                        ) : (
+                                                            <Lock className="w-4 h-4 mr-2" />
+                                                        )}
+                                                        {reportCards.every((r) => reportLocks[r.student_id]) ? 'Unlock all' : 'Lock all'}
+                                                    </Button>
+                                                )}
+                                            </>
+                                        )}
                                     </>
                                 )}
                             </div>
@@ -1103,18 +1267,29 @@ export default function ReportsPage() {
                 <TabsContent value="term-reports" className="mt-6">
                     {reportCards.length > 0 ? (
                         <div ref={printRef} className="print-content space-y-8">
-                            {reportCards.map((data) => (
-                                <ReportCardRenderer
-                                    key={data.student.id}
-                                    data={{...data, total_students: totalStudentsInClass}}
-                                    classInfo={selectedClassInfo}
-                                    term={selectedTerm}
-                                    academicYear={selectedYear}
-                                    totalStudents={totalStudentsInClass}
-                                    signatures={reportSignatures}
-                                    template={reportTemplate}
-                                />
-                            ))}
+                            {reportCards.map((data) => {
+                                const studentId = data.student?.id || data.student_id;
+                                const isLocked = !!reportLocks[studentId];
+                                return (
+                                    <div key={studentId} className="relative">
+                                        {isLocked ? (
+                                            <div className="absolute right-3 top-3 z-10 flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold shadow-sm" data-testid={`report-locked-${studentId}`}>
+                                                <Lock className="w-3 h-3" />
+                                                LOCKED
+                                            </div>
+                                        ) : null}
+                                        <ReportCardRenderer
+                                            data={{...data, total_students: totalStudentsInClass}}
+                                            classInfo={selectedClassInfo}
+                                            term={selectedTerm}
+                                            academicYear={selectedYear}
+                                            totalStudents={totalStudentsInClass}
+                                            signatures={reportSignatures}
+                                            template={reportTemplate}
+                                        />
+                                    </div>
+                                );
+                            })}
                         </div>
                     ) : (
                         <Card className="rounded-2xl border-border shadow-sm">
@@ -1160,6 +1335,39 @@ export default function ReportsPage() {
                     }
                 }
             `}</style>
+
+            {/* PDF Preview Modal */}
+            <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+                <DialogContent className="rounded-2xl p-4 max-w-5xl w-[95vw] max-h-[90vh] flex flex-col" data-testid="pdf-preview-modal">
+                    <DialogHeader>
+                        <DialogTitle>Report card preview</DialogTitle>
+                        <DialogDescription>
+                            This is a PDF-quality preview of {selectedClassInfo?.name || 'the report'} ({selectedTerm}, {selectedYear}).
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 mt-3 rounded-xl overflow-hidden border bg-muted/30">
+                        {previewSrc ? (
+                            <iframe
+                                src={previewSrc}
+                                title="Report Card PDF Preview"
+                                className="w-full h-[65vh]"
+                                data-testid="pdf-preview-iframe"
+                            />
+                        ) : (
+                            <div className="h-[60vh] flex items-center justify-center">
+                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter className="flex justify-end gap-2 mt-3">
+                        <Button variant="outline" className="rounded-xl" onClick={() => setPreviewOpen(false)}>Close</Button>
+                        <Button className="rounded-xl" onClick={handleExportPdf} disabled={exportingPdf}>
+                            {exportingPdf ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+                            Download PDF
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

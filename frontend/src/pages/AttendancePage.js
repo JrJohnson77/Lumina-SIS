@@ -95,6 +95,22 @@ export default function AttendancePage() {
         }));
     };
 
+    // Default every class-student to "present" if not already marked.
+    // Teachers then only need to mark exceptions (A/L/E).
+    useEffect(() => {
+        if (!selectedClass) return;
+        const classStudents = students.filter(s => s.class_id === selectedClass);
+        if (classStudents.length === 0) return;
+        setAttendanceRecords(prev => {
+            const next = { ...prev };
+            let changed = false;
+            for (const s of classStudents) {
+                if (!next[s.id]) { next[s.id] = 'present'; changed = true; }
+            }
+            return changed ? next : prev;
+        });
+    }, [selectedClass, students, attendance]);
+
     const handleSaveAttendance = async () => {
         if (!selectedClass) {
             toast.error('Please select a class');

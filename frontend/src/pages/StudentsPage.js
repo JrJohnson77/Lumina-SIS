@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -8,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
+import { Badge } from '../components/ui/badge';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { toast } from 'sonner';
 import { 
     Plus, Search, Edit2, Trash2, GraduationCap, Loader2,
@@ -45,6 +48,9 @@ export default function StudentsPage() {
     const [submitting, setSubmitting] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [expandedFamily, setExpandedFamily] = useState({});
+    const [deleteTarget, setDeleteTarget] = useState(null); // {id, name}
+    const [deleting, setDeleting] = useState(false);
+    const [siblingSuggestions, setSiblingSuggestions] = useState([]);
     const fileInputRef = useRef(null);
     const { isAdmin, isTeacher, isParent } = useAuth();
 
@@ -136,13 +142,36 @@ export default function StudentsPage() {
         setIsDialogOpen(true);
     };
 
-    const handleDelete = async (studentId) => {
-        if (!window.confirm('Are you sure?')) return;
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await axios.delete(`${API}/students/${studentId}`);
-            toast.success('Student deleted');
+            await axios.delete(`${API}/students/${deleteTarget.id}`);
+            toast.success(`Student "${deleteTarget.name}" deleted`);
+            setDeleteTarget(null);
             fetchData();
-        } catch (error) { toast.error('Failed to delete student'); }
+        } catch (error) {
+            toast.error(error?.response?.data?.detail || 'Failed to delete student');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    // Sibling detection: any existing student whose family_members contain
+    // a guardian email matching the email being entered in the form.
+    const checkSiblings = (familyMembers) => {
+        const emails = (familyMembers || []).map((m) => (m.email || '').toLowerCase().trim()).filter(Boolean);
+        if (emails.length === 0) {
+            setSiblingSuggestions([]);
+            return;
+        }
+        const editingId = editingStudent?.id;
+        const matches = students.filter((s) => {
+            if (editingId && s.id === editingId) return false;
+            const fams = s.family_members || [];
+            return fams.some((m) => emails.includes((m.email || '').toLowerCase().trim()));
+        });
+        setSiblingSuggestions(matches.slice(0, 5));
     };
 
     const addFamilyMember = () => {
@@ -163,7 +192,12 @@ export default function StudentsPage() {
         setFormData(prev => {
             const updated = [...prev.family_members];
             updated[index] = { ...updated[index], [field]: value };
-            return { ...prev, family_members: updated };
+            const next = { ...prev, family_members: updated };
+            if (field === 'email') {
+                // Defer to avoid recomputing on every keystroke
+                setTimeout(() => checkSiblings(next.family_members), 250);
+            }
+            return next;
         });
     };
 
@@ -462,6 +496,19 @@ export default function StudentsPage() {
                                         {editingStudent ? 'Update Student' : 'Add Student'}
                                     </Button>
                                 </div>
+
+                                {siblingSuggestions.length > 0 ? (
+                                    <div className="mt-3 p-3 rounded-xl border border-amber-300 bg-amber-50" data-testid="sibling-suggestions">
+                                        <p className="text-sm font-semibold text-amber-900 mb-2">
+                                            Possible sibling{siblingSuggestions.length > 1 ? 's' : ''} detected (same guardian email):
+                                        </p>
+                                        <ul className="text-xs text-amber-800 space-y-1">
+                                            {siblingSuggestions.map((s) => (
+                                                <li key={s.id}>• {s.first_name} {s.last_name} <span className="text-amber-600">({s.student_id || s.id.slice(0, 6)})</span></li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                ) : null}
                             </form>
                         </DialogContent>
                     </Dialog>
@@ -488,7 +535,9 @@ export default function StudentsPage() {
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-semibold text-sm truncate">{student.first_name} {student.middle_name ? `${student.middle_name} ` : ''}{student.last_name}</h3>
+                                    <Link to={`/students/${student.id}`} className="block hover:underline" data-testid={`student-link-${student.id}`}>
+                                        <h3 className="font-semibold text-sm truncate">{student.first_name} {student.middle_name ? `${student.middle_name} ` : ''}{student.last_name}</h3>
+                                    </Link>
                                     <p className="text-xs text-muted-foreground">{student.student_id || 'No ID'} · {student.gender}</p>
                                     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                         <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-muted font-medium">{getClassName(student.class_id)}</span>
@@ -499,7 +548,7 @@ export default function StudentsPage() {
                                 {(isAdmin || isTeacher) && (
                                     <div className="flex gap-1">
                                         <Button variant="ghost" size="sm" onClick={() => handleEdit(student)} className="h-7 w-7 p-0 rounded-lg"><Edit2 className="w-3.5 h-3.5" /></Button>
-                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(student.id)} className="h-7 w-7 p-0 rounded-lg text-destructive hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>
+                                        <Button variant="ghost" size="sm" onClick={() => setDeleteTarget({ id: student.id, name: `${student.first_name} ${student.last_name}` })} className="h-7 w-7 p-0 rounded-lg text-destructive hover:text-destructive" data-testid={`student-delete-${student.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
                                     </div>
                                 )}
                             </div>
@@ -514,6 +563,19 @@ export default function StudentsPage() {
                     <p className="text-sm text-muted-foreground">{searchQuery ? 'Try a different search term' : 'Add your first student to get started'}</p>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+                title="Delete student"
+                recordName={deleteTarget?.name}
+                message="This will permanently delete the student and all related records (grades, attendance, health, discipline)."
+                confirmLabel="Delete"
+                destructive
+                submitting={deleting}
+                onConfirm={handleDelete}
+                testIdPrefix="student-delete-confirm"
+            />
         </div>
     );
 }

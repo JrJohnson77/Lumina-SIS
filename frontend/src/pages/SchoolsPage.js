@@ -10,6 +10,7 @@ import { Switch } from '../components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import ReportTemplateDesigner from './ReportTemplateDesigner';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
     Plus, Edit2, Trash2, Building2, Loader2, Save, ArrowLeft,
     BookOpen, Award, Heart, Users as UsersIcon, Settings, Palette,
@@ -57,6 +58,8 @@ export default function SchoolsPage() {
     const [schools, setSchools] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingSchool, setEditingSchool] = useState(null);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleting, setDeleting] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const [formData, setFormData] = useState(initialSchoolForm);
     const [submitting, setSubmitting] = useState(false);
@@ -149,13 +152,19 @@ export default function SchoolsPage() {
         } finally { setSubmitting(false); }
     };
 
-    const handleDelete = async (schoolId) => {
-        if (!window.confirm('Are you sure? This will delete the school and all associated data.')) return;
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await axios.delete(`${API}/schools/${schoolId}`);
-            toast.success('School deleted');
+            await axios.delete(`${API}/schools/${deleteTarget.id}`);
+            toast.success(`School "${deleteTarget.name}" deleted`);
+            setDeleteTarget(null);
             fetchSchools();
-        } catch (error) { toast.error('Failed to delete school'); }
+        } catch (error) {
+            toast.error(error?.response?.data?.detail || 'Failed to delete school');
+        } finally {
+            setDeleting(false);
+        }
     };
 
     // ========== GRADEBOOK SETTINGS FUNCTIONS ==========
@@ -851,7 +860,7 @@ export default function SchoolsPage() {
                                     </div>
                                     <div className="flex gap-1">
                                         <Button variant="ghost" size="sm" onClick={() => handleEdit(school)} className="h-8 w-8 p-0 rounded-lg" data-testid={`edit-school-${school.school_code}`}><Edit2 className="w-3.5 h-3.5" /></Button>
-                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(school.id)} className="h-8 w-8 p-0 rounded-lg text-destructive hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>
+                                        <Button variant="ghost" size="sm" onClick={() => setDeleteTarget({ id: school.id, name: school.name })} className="h-8 w-8 p-0 rounded-lg text-destructive hover:text-destructive" data-testid={`school-delete-${school.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
                                     </div>
                                 </div>
                                 <h3 className="font-bold text-base mb-0.5">{school.name}</h3>
@@ -872,6 +881,19 @@ export default function SchoolsPage() {
                     <p className="text-sm text-muted-foreground">Create your first school to get started</p>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+                title="Delete school"
+                recordName={deleteTarget?.name}
+                message="This will permanently delete the school AND all its students, classes, grades, attendance, health and discipline records. This action cannot be undone."
+                confirmLabel="Delete forever"
+                destructive
+                submitting={deleting}
+                onConfirm={handleDelete}
+                testIdPrefix="school-delete-confirm"
+            />
         </div>
     );
 }

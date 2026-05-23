@@ -9,7 +9,9 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Loader2, Plus, Edit2, Trash2, Users, CheckCircle2, Clock, UserPlus, X } from 'lucide-react';
+import { Loader2, Plus, Edit2, Trash2, Users, CheckCircle2, Clock, UserPlus, X, ArrowRightCircle } from 'lucide-react';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -23,6 +25,10 @@ export default function AdmissionsPage() {
     const [stats, setStats] = useState({ inquiries: 0, applications: 0, accepted: 0, pending: 0 });
     const [showDialog, setShowDialog] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleting, setDeleting] = useState(false);
+    const [convertingId, setConvertingId] = useState(null);
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({
         student_first_name: '', student_last_name: '', parent_name: '', parent_email: '',
         parent_phone: '', grade_level: '', status: 'inquiry'
@@ -81,16 +87,36 @@ export default function AdmissionsPage() {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm('Delete this record?')) return;
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await axios.delete(`${API}/admissions/${id}`, {
+            await axios.delete(`${API}/admissions/${deleteTarget.id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            toast.success('Deleted successfully');
+            toast.success(`Deleted "${deleteTarget.name}"`);
+            setDeleteTarget(null);
             fetchData();
         } catch (error) {
-            toast.error('Failed to delete');
+            toast.error(error?.response?.data?.detail || 'Failed to delete');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const handleConvert = async (item) => {
+        setConvertingId(item.id);
+        try {
+            const res = await axios.post(`${API}/admissions/${item.id}/convert`, null, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            toast.success('Application converted to student');
+            // Navigate to the new student's profile (pre-fills are already in place)
+            navigate(`/students/${res.data.id}`);
+        } catch (error) {
+            toast.error(error?.response?.data?.detail || 'Failed to convert application');
+        } finally {
+            setConvertingId(null);
         }
     };
 
@@ -209,7 +235,7 @@ export default function AdmissionsPage() {
                                                         <Button size="sm" variant="outline" onClick={() => { setEditingItem(item); setFormData(item); setShowDialog(true); }} className="rounded-lg">
                                                             <Edit2 className="w-4 h-4" />
                                                         </Button>
-                                                        <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)} className="rounded-lg">
+                                                        <Button size="sm" variant="destructive" onClick={() => setDeleteTarget({ id: item.id, name: `${item.student_first_name} ${item.student_last_name}` })} className="rounded-lg" data-testid={`inquiry-delete-${item.id}`}>
                                                             <Trash2 className="w-4 h-4" />
                                                         </Button>
                                                     </td>
@@ -264,6 +290,18 @@ export default function AdmissionsPage() {
                                                         <Button size="sm" variant="outline" onClick={() => { setEditingItem(item); setFormData(item); setShowDialog(true); }} className="rounded-lg">
                                                             <Edit2 className="w-4 h-4" />
                                                         </Button>
+                                                        {item.status === 'accepted' && !item.converted_student_id ? (
+                                                            <Button size="sm" onClick={() => handleConvert(item)} disabled={convertingId === item.id} className="rounded-lg" data-testid={`convert-btn-${item.id}`}>
+                                                                {convertingId === item.id ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <ArrowRightCircle className="w-4 h-4 mr-1.5" />}
+                                                                Convert to student
+                                                            </Button>
+                                                        ) : null}
+                                                        {item.converted_student_id ? (
+                                                            <Badge className="bg-emerald-100 text-emerald-800" data-testid={`converted-badge-${item.id}`}>Enrolled</Badge>
+                                                        ) : null}
+                                                        <Button size="sm" variant="destructive" onClick={() => setDeleteTarget({ id: item.id, name: `${item.student_first_name} ${item.student_last_name}` })} className="rounded-lg" data-testid={`admission-delete-${item.id}`}>
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -275,6 +313,19 @@ export default function AdmissionsPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+                title="Delete admission record"
+                recordName={deleteTarget?.name}
+                message="This will permanently remove the inquiry/application."
+                confirmLabel="Delete"
+                destructive
+                submitting={deleting}
+                onConfirm={handleDelete}
+                testIdPrefix="admission-delete-confirm"
+            />
 
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
                 <DialogContent className="rounded-2xl max-w-2xl p-6">

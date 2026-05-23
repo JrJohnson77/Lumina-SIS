@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { 
     Plus, 
     Search, 
@@ -45,6 +46,8 @@ export default function ClassesPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingClass, setEditingClass] = useState(null);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleting, setDeleting] = useState(false);
     const [formData, setFormData] = useState(initialFormData);
     const [submitting, setSubmitting] = useState(false);
     const { isAdmin, isTeacher, user } = useAuth();
@@ -117,15 +120,18 @@ export default function ClassesPage() {
         setIsDialogOpen(true);
     };
 
-    const handleDelete = async (classId) => {
-        if (!window.confirm('Are you sure you want to delete this class?')) return;
-        
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await axios.delete(`${API}/classes/${classId}`);
-            toast.success('Class deleted');
+            await axios.delete(`${API}/classes/${deleteTarget.id}`);
+            toast.success(`Class "${deleteTarget.name}" deleted`);
+            setDeleteTarget(null);
             fetchData();
         } catch (error) {
-            toast.error('Failed to delete class');
+            toast.error(error?.response?.data?.detail || 'Failed to delete class');
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -361,7 +367,7 @@ export default function ClassesPage() {
                                             variant="outline" 
                                             size="sm" 
                                             className="rounded-full text-destructive hover:bg-destructive/10"
-                                            onClick={() => handleDelete(cls.id)}
+                                            onClick={() => setDeleteTarget({ id: cls.id, name: cls.name })}
                                             data-testid={`delete-class-${cls.id}`}
                                         >
                                             <Trash2 className="w-4 h-4" />
@@ -387,6 +393,19 @@ export default function ClassesPage() {
                     </CardContent>
                 </Card>
             )}
+
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+                title="Delete class"
+                recordName={deleteTarget?.name}
+                message="This will delete the class. Students assigned to it will need to be reassigned."
+                confirmLabel="Delete"
+                destructive
+                submitting={deleting}
+                onConfirm={handleDelete}
+                testIdPrefix="class-delete-confirm"
+            />
         </div>
     );
 }

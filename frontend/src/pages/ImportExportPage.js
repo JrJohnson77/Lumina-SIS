@@ -31,7 +31,92 @@ export default function ImportExportPage() {
     const [importResult, setImportResult] = useState(null);
     const [signatures, setSignatures] = useState({});
     const [uploadingSignature, setUploadingSignature] = useState(null);
+    const [studentPreview, setStudentPreview] = useState(null);
+    const [teacherPreview, setTeacherPreview] = useState(null);
     const { isAdmin, isSuperuser } = useAuth();
+
+    // Required headers for validation
+    const STUDENT_REQUIRED = ['first_name', 'last_name'];
+    const TEACHER_REQUIRED = ['name', 'email', 'username'];
+
+    const parseCsv = (text) => {
+        // Minimal CSV parser supporting quoted fields and commas in values
+        const out = [];
+        const lines = text.replace(/\r/g, '').split('\n').filter(Boolean);
+        if (lines.length === 0) return out;
+        const parseLine = (line) => {
+            const cells = [];
+            let cur = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; continue; }
+                if (ch === '"') { inQuotes = !inQuotes; continue; }
+                if (ch === ',' && !inQuotes) { cells.push(cur); cur = ''; continue; }
+                cur += ch;
+            }
+            cells.push(cur);
+            return cells.map((c) => c.trim());
+        };
+        const headers = parseLine(lines[0]).map((h) => h.toLowerCase().trim());
+        for (let i = 1; i < lines.length; i++) {
+            const cells = parseLine(lines[i]);
+            const row = {};
+            headers.forEach((h, idx) => { row[h] = cells[idx] || ''; });
+            out.push(row);
+        }
+        return { headers, rows: out };
+    };
+
+    const validateRows = (rows, required) => {
+        return rows.map((row, idx) => {
+            const errors = [];
+            for (const field of required) {
+                if (!row[field]) errors.push(`Missing ${field}`);
+            }
+            if (row.email && !/^[\w.-]+@[\w.-]+\.[A-Za-z]{2,}$/.test(row.email)) {
+                errors.push('Invalid email');
+            }
+            return { rowNumber: idx + 2, data: row, errors }; // +2 because header is row 1, 1-indexed
+        });
+    };
+
+    const buildPreview = async (file, required) => {
+        const text = await file.text();
+        const parsed = parseCsv(text);
+        if (!parsed.rows || parsed.rows.length === 0) {
+            return { headers: parsed.headers || [], rows: [], invalid: 0, valid: 0 };
+        }
+        const rows = validateRows(parsed.rows, required);
+        const invalid = rows.filter((r) => r.errors.length > 0).length;
+        return { headers: parsed.headers, rows, invalid, valid: rows.length - invalid };
+    };
+
+    const onStudentFileChange = async (file) => {
+        setStudentFile(file);
+        setStudentPreview(null);
+        setImportResult(null);
+        if (!file) return;
+        try {
+            const preview = await buildPreview(file, STUDENT_REQUIRED);
+            setStudentPreview(preview);
+        } catch (_e) {
+            toast.error('Failed to parse CSV');
+        }
+    };
+
+    const onTeacherFileChange = async (file) => {
+        setTeacherFile(file);
+        setTeacherPreview(null);
+        setImportResult(null);
+        if (!file) return;
+        try {
+            const preview = await buildPreview(file, TEACHER_REQUIRED);
+            setTeacherPreview(preview);
+        } catch (_e) {
+            toast.error('Failed to parse CSV');
+        }
+    };
 
     useEffect(() => {
         fetchClasses();
@@ -64,6 +149,12 @@ export default function ImportExportPage() {
         if (!selectedClass) {
             toast.error('Please select a class');
             return;
+        }
+        if (studentPreview && studentPreview.invalid > 0) {
+            const proceed = window.confirm(
+                `${studentPreview.invalid} row(s) have validation errors and will be skipped on the server. Continue?`
+            );
+            if (!proceed) return;
         }
 
         setImportingStudents(true);
@@ -202,11 +293,15 @@ export default function ImportExportPage() {
                             <Input
                                 type="file"
                                 accept=".csv"
-                                onChange={(e) => setStudentFile(e.target.files[0])}
+                                onChange={(e) => onStudentFileChange(e.target.files[0])}
                                 className="rounded-xl"
                                 data-testid="student-csv-input"
                             />
                         </div>
+
+                        {studentPreview ? (
+                            <CsvPreview preview={studentPreview} testId="student-preview" />
+                        ) : null}
 
                         <div className="flex gap-2">
                             <Button
@@ -253,11 +348,15 @@ export default function ImportExportPage() {
                             <Input
                                 type="file"
                                 accept=".csv"
-                                onChange={(e) => setTeacherFile(e.target.files[0])}
+                                onChange={(e) => onTeacherFileChange(e.target.files[0])}
                                 className="rounded-xl"
                                 data-testid="teacher-csv-input"
                             />
                         </div>
+
+                        {teacherPreview ? (
+                            <CsvPreview preview={teacherPreview} testId="teacher-preview" />
+                        ) : null}
 
                         <div className="flex gap-2">
                             <Button
@@ -431,3 +530,54 @@ export default function ImportExportPage() {
         </div>
     );
 }
+
+const CsvPreview = ({ preview, testId }) => {
+    if (!preview || !preview.rows) return null;
+    const hasErrors = preview.invalid > 0;
+    return (
+        <div className="rounded-xl border bg-muted/20 p-4 space-y-3" data-testid={testId}>
+            <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">Validation report</h4>
+                <div className="text-xs flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                        {preview.valid} valid
+                    </span>
+                    <span className={`flex items-center gap-1 ${hasErrors ? 'text-rose-700' : 'text-muted-foreground'}`}>
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {preview.invalid} with errors
+                    </span>
+                </div>
+            </div>
+            <div className="max-h-64 overflow-auto rounded-lg border bg-background">
+                <table className="w-full text-xs" data-testid={`${testId}-table`}>
+                    <thead className="bg-muted/50 sticky top-0">
+                        <tr>
+                            <th className="text-left p-2 font-medium">Row</th>
+                            {preview.headers.map((h) => (
+                                <th key={h} className="text-left p-2 font-medium whitespace-nowrap">{h}</th>
+                            ))}
+                            <th className="text-left p-2 font-medium">Issues</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {preview.rows.slice(0, 50).map((r) => (
+                            <tr key={r.rowNumber} className={r.errors.length > 0 ? 'bg-rose-50' : ''} data-testid={`${testId}-row-${r.rowNumber}${r.errors.length > 0 ? '-invalid' : ''}`}>
+                                <td className="p-2 font-mono">{r.rowNumber}</td>
+                                {preview.headers.map((h) => (
+                                    <td key={h} className="p-2 whitespace-nowrap">{r.data[h] || <span className="text-muted-foreground/60">—</span>}</td>
+                                ))}
+                                <td className="p-2 text-rose-700">
+                                    {r.errors.length > 0 ? r.errors.join(', ') : <span className="text-emerald-700">OK</span>}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {preview.rows.length > 50 ? (
+                    <p className="text-xs text-muted-foreground p-2 border-t">Showing first 50 of {preview.rows.length} rows.</p>
+                ) : null}
+            </div>
+        </div>
+    );
+};

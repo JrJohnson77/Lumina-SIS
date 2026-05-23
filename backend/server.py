@@ -138,6 +138,7 @@ class SchoolBase(BaseModel):
     teacher_signature: Optional[str] = ""
     academic_years: List[AcademicYear] = []
     subjects: List[SchoolSubject] = []
+    attendance_threshold: int = 85  # Percent below which students are flagged
 
 class SchoolCreate(SchoolBase):
     pass
@@ -333,6 +334,9 @@ class GradebookResponse(BaseModel):
     overall_points: float
     overall_domain: str
     graded_by: str
+    is_locked: bool = False
+    locked_at: Optional[str] = ""
+    locked_by: Optional[str] = ""
     created_at: str
     updated_at: str
 
@@ -1291,6 +1295,7 @@ async def create_student(student: StudentCreate, current_user: dict = Depends(re
         "updated_at": now
     }
     await db.students.insert_one(doc)
+    await write_audit(current_user, "create", "student", student_id, f"{doc.get('first_name','')} {doc.get('last_name','')}")
     return StudentResponse(**doc)
 
 @api_router.get("/students", response_model=List[StudentResponse])
@@ -1360,14 +1365,21 @@ async def update_student(student_id: str, student: StudentCreate, current_user: 
     await db.students.update_one(query, {"$set": update_data})
     updated = await db.students.find_one(query, {"_id": 0})
     updated["age"] = age
+    await write_audit(current_user, "update", "student", student_id, f"{updated.get('first_name','')} {updated.get('last_name','')}")
     return StudentResponse(**updated)
 
 @api_router.delete("/students/{student_id}")
 async def delete_student(student_id: str, current_user: dict = Depends(require_permission("manage_students"))):
     query = {"id": student_id, "school_code": current_user["school_code"]}
+    existing = await db.students.find_one(query, {"_id": 0})
     result = await db.students.delete_one(query)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Student not found")
+    if existing:
+        await write_audit(
+            current_user, "delete", "student", student_id,
+            f"{existing.get('first_name','')} {existing.get('last_name','')}"
+        )
     return {"message": "Student deleted successfully"}
 
 # ==================== CLASS ROUTES ====================
@@ -1655,6 +1667,10 @@ async def save_gradebook(entry: GradebookEntry, current_user: dict = Depends(req
         "academic_year": entry.academic_year,
         "school_code": current_user["school_code"]
     })
+    
+    # Block edits when the existing entry is locked (only admin/superuser can unlock)
+    if existing and existing.get("is_locked"):
+        raise HTTPException(status_code=403, detail="Gradebook entry is locked. Ask an admin to unlock.")
     
     doc = {
         "student_id": entry.student_id,
@@ -2978,6 +2994,419 @@ async def enrollment_execute(
         # legacy alias used by frontend
         "withdrawn": counts["withdrawn"],
     }
+
+
+# ==================== AUDIT LOG MODULE ====================
+
+class AuditLogEntry(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    school_code: str
+    actor_id: str
+    actor_name: str
+    actor_role: str
+    action: str  # create, update, delete, lock, unlock, convert, login_fail, etc.
+    entity_type: str  # student, gradebook, enrollment, admission, discipline, health, user, school
+    entity_id: str
+    entity_label: str
+    details: Dict[str, Any] = {}
+    created_at: str
+
+
+async def write_audit(
+    actor: dict,
+    action: str,
+    entity_type: str,
+    entity_id: str,
+    entity_label: str = "",
+    details: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Append an audit-log row. Best-effort: never raises (so it can't break the parent op)."""
+    try:
+        await db.audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "school_code": actor.get("school_code", ""),
+            "actor_id": actor.get("id", ""),
+            "actor_name": actor.get("name", ""),
+            "actor_role": actor.get("role", ""),
+            "action": action,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "entity_label": entity_label or "",
+            "details": details or {},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"audit-log failed: {e}")
+
+
+@api_router.get("/audit-logs", response_model=List[AuditLogEntry])
+async def list_audit_logs(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    limit: int = 200,
+    current_user: dict = Depends(require_roles([UserRole.ADMIN])),
+):
+    """GET /api/audit-logs — paginated audit trail (school-scoped). Role: superuser/admin."""
+    q = {"school_code": current_user["school_code"]}
+    if entity_type:
+        q["entity_type"] = entity_type
+    if entity_id:
+        q["entity_id"] = entity_id
+    if actor_id:
+        q["actor_id"] = actor_id
+    docs = await db.audit_logs.find(q, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(limit, 1000)))
+    return [AuditLogEntry(**d) for d in docs]
+
+
+# ==================== PASSWORD RESET MODULE ====================
+# Mock email transport: tokens are printed to the backend log.
+
+class ForgotPasswordRequest(BaseModel):
+    school_code: str
+    username: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    """POST /api/auth/forgot-password — issue a one-time reset token. Response is the same
+    whether the user exists or not (to avoid account enumeration). In dev, the token is
+    logged to the backend console — wire to real SMTP in prod."""
+    user = await db.users.find_one(
+        {"school_code": req.school_code.upper(), "username": req.username.lower()},
+        {"_id": 0, "id": 1, "name": 1, "username": 1},
+    )
+    if user:
+        token = uuid.uuid4().hex
+        now = datetime.now(timezone.utc)
+        await db.password_resets.insert_one({
+            "id": str(uuid.uuid4()),
+            "token": token,
+            "user_id": user["id"],
+            "school_code": req.school_code.upper(),
+            "created_at": now.isoformat(),
+            "expires_at": (now + timedelta(hours=1)).isoformat(),
+            "used": False,
+        })
+        logging.getLogger(__name__).info(
+            f"[FORGOT PASSWORD] school={req.school_code} user={req.username} token={token} (valid 1h)"
+        )
+    # Always 200 — no enumeration
+    return {"message": "If the account exists, a reset link has been generated."}
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    """POST /api/auth/reset-password — exchange a valid token for a new password."""
+    record = await db.password_resets.find_one({"token": req.token, "used": False}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or used token")
+    try:
+        expires = datetime.fromisoformat(record["expires_at"])
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid token")
+    if datetime.now(timezone.utc) > expires:
+        raise HTTPException(status_code=400, detail="Token expired")
+    if not req.new_password or len(req.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    new_hash = hash_password(req.new_password)
+    await db.users.update_one({"id": record["user_id"]}, {"$set": {"password_hash": new_hash}})
+    await db.password_resets.update_one({"token": req.token}, {"$set": {"used": True}})
+    return {"message": "Password reset successful"}
+
+
+# ==================== GRADEBOOK LOCK ====================
+
+@api_router.post("/gradebook/{gradebook_id}/lock")
+async def lock_gradebook(
+    gradebook_id: str, current_user: dict = Depends(require_roles([UserRole.ADMIN, UserRole.TEACHER]))
+):
+    """POST /api/gradebook/{id}/lock — lock an entry from further edits. Role: admin/teacher.
+    Teachers can lock entries for their classes."""
+    query = {"id": gradebook_id, "school_code": current_user["school_code"]}
+    entry = await db.gradebook.find_one(query, {"_id": 0})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Gradebook entry not found")
+    if current_user["role"] == UserRole.TEACHER:
+        class_ids = await get_teacher_class_ids(current_user)
+        if entry.get("class_id") not in class_ids:
+            raise HTTPException(status_code=403, detail="Gradebook entry is not in your class")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.gradebook.update_one(
+        query, {"$set": {"is_locked": True, "locked_at": now, "locked_by": current_user["id"]}}
+    )
+    await write_audit(current_user, "lock", "gradebook", gradebook_id, "")
+    return {"message": "Gradebook entry locked"}
+
+
+@api_router.post("/gradebook/{gradebook_id}/unlock")
+async def unlock_gradebook(
+    gradebook_id: str, current_user: dict = Depends(require_roles([UserRole.ADMIN]))
+):
+    """POST /api/gradebook/{id}/unlock — unlock an entry. Role: superuser/admin only."""
+    query = {"id": gradebook_id, "school_code": current_user["school_code"]}
+    result = await db.gradebook.update_one(
+        query, {"$set": {"is_locked": False, "locked_at": "", "locked_by": ""}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Gradebook entry not found")
+    await write_audit(current_user, "unlock", "gradebook", gradebook_id, "")
+    return {"message": "Gradebook entry unlocked"}
+
+
+@api_router.get("/gradebook/{class_id}/distribution")
+async def gradebook_distribution(
+    class_id: str,
+    term: str,
+    academic_year: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """GET /api/gradebook/{class_id}/distribution — count of overall grades (A/B/C/D/E/U)
+    for a class+term+year. Role: any authenticated user with scope on that class."""
+    if current_user["role"] == UserRole.TEACHER:
+        class_ids = await get_teacher_class_ids(current_user)
+        if class_id not in class_ids:
+            raise HTTPException(status_code=403, detail="Class is not in your scope")
+    q = {
+        "school_code": current_user["school_code"],
+        "class_id": class_id,
+        "term": term,
+        "academic_year": academic_year,
+    }
+    entries = await db.gradebook.find(q, {"_id": 0, "overall_grade": 1}).to_list(1000)
+    buckets = {"A": 0, "B": 0, "C": 0, "D": 0, "E": 0, "U": 0}
+    for e in entries:
+        g = (e.get("overall_grade") or "").upper()
+        # collapse +/- to letter
+        letter = g[0] if g else "U"
+        if letter not in buckets:
+            letter = "U"
+        buckets[letter] += 1
+    return {"class_id": class_id, "term": term, "academic_year": academic_year, "total": len(entries), "buckets": buckets}
+
+
+# ==================== REPORT CARD LOCK ====================
+# Report cards are generated dynamically; we record locks in a separate collection.
+
+class ReportCardLockResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    school_code: str
+    student_id: str
+    term: str
+    academic_year: str
+    locked: bool
+    locked_at: str
+    locked_by: str
+    locked_by_name: str
+
+
+@api_router.post("/report-cards/{student_id}/lock", response_model=ReportCardLockResponse)
+async def lock_report_card(
+    student_id: str,
+    term: str,
+    academic_year: str,
+    current_user: dict = Depends(require_roles([UserRole.ADMIN])),
+):
+    """POST /api/report-cards/{student_id}/lock?term=&academic_year= — lock a report card.
+    Role: superuser/admin."""
+    await _ensure_student_in_school(student_id, current_user["school_code"])
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "school_code": current_user["school_code"],
+        "student_id": student_id,
+        "term": term,
+        "academic_year": academic_year,
+        "locked": True,
+        "locked_at": now,
+        "locked_by": current_user["id"],
+        "locked_by_name": current_user.get("name", ""),
+    }
+    await db.report_card_locks.update_one(
+        {"school_code": doc["school_code"], "student_id": student_id, "term": term, "academic_year": academic_year},
+        {"$set": doc},
+        upsert=True,
+    )
+    await write_audit(current_user, "lock", "report_card", student_id, f"{term} {academic_year}")
+    return ReportCardLockResponse(**doc)
+
+
+@api_router.delete("/report-cards/{student_id}/lock")
+async def unlock_report_card(
+    student_id: str,
+    term: str,
+    academic_year: str,
+    current_user: dict = Depends(require_roles([UserRole.ADMIN])),
+):
+    """DELETE /api/report-cards/{student_id}/lock?term=&academic_year= — unlock. Admin only."""
+    result = await db.report_card_locks.delete_one(
+        {
+            "school_code": current_user["school_code"],
+            "student_id": student_id,
+            "term": term,
+            "academic_year": academic_year,
+        }
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="No lock found")
+    await write_audit(current_user, "unlock", "report_card", student_id, f"{term} {academic_year}")
+    return {"message": "Report card unlocked"}
+
+
+@api_router.get("/report-cards/locks", response_model=List[ReportCardLockResponse])
+async def list_report_card_locks(
+    term: Optional[str] = None,
+    academic_year: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """GET /api/report-cards/locks — list current locks for a term/year."""
+    q = {"school_code": current_user["school_code"]}
+    if term:
+        q["term"] = term
+    if academic_year:
+        q["academic_year"] = academic_year
+    docs = await db.report_card_locks.find(q, {"_id": 0}).to_list(2000)
+    return [ReportCardLockResponse(**d) for d in docs]
+
+
+# ==================== ATTENDANCE SUMMARY ====================
+
+@api_router.get("/students/{student_id}/attendance/summary")
+async def attendance_summary(
+    student_id: str,
+    month: Optional[str] = None,  # YYYY-MM
+    current_user: dict = Depends(get_current_user),
+):
+    """GET /api/students/{student_id}/attendance/summary?month=YYYY-MM
+    Returns counts and percent-present. Parents may only query their own children;
+    teachers only students in their classes."""
+    student = await db.students.find_one(
+        {"id": student_id, "school_code": current_user["school_code"]}, {"_id": 0}
+    )
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    if current_user["role"] == UserRole.PARENT and student.get("parent_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if current_user["role"] == UserRole.TEACHER:
+        class_ids = await get_teacher_class_ids(current_user)
+        if student.get("class_id") not in class_ids:
+            raise HTTPException(status_code=403, detail="Student is not in your class")
+
+    if month:
+        try:
+            datetime.strptime(month + "-01", "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+        date_q = {"$gte": f"{month}-01", "$lt": f"{month}-32"}
+    else:
+        date_q = None
+
+    q = {"student_id": student_id, "school_code": current_user["school_code"]}
+    if date_q:
+        q["date"] = date_q
+    rows = await db.attendance.find(q, {"_id": 0, "status": 1, "date": 1}).to_list(10000)
+    present = sum(1 for r in rows if r.get("status") == "present")
+    absent = sum(1 for r in rows if r.get("status") == "absent")
+    late = sum(1 for r in rows if r.get("status") == "late")
+    excused = sum(1 for r in rows if r.get("status") == "excused")
+    total = present + absent + late + excused
+    # Late counts as 0.5 present for the % calculation; excused counts as full present
+    percent_present = round(((present + 0.5 * late + excused) / total) * 100, 1) if total else 0.0
+
+    # threshold from school
+    school = await db.schools.find_one({"school_code": current_user["school_code"]}, {"_id": 0, "attendance_threshold": 1})
+    threshold = (school or {}).get("attendance_threshold", 85)
+    return {
+        "student_id": student_id,
+        "month": month or "all-time",
+        "present": present,
+        "absent": absent,
+        "late": late,
+        "excused": excused,
+        "total": total,
+        "percent_present": percent_present,
+        "threshold": threshold,
+        "below_threshold": total > 0 and percent_present < threshold,
+    }
+
+
+# ==================== ADMISSIONS PIPELINE ====================
+
+@api_router.post("/admissions/{admission_id}/convert", response_model=StudentResponse)
+async def convert_admission_to_student(
+    admission_id: str, current_user: dict = Depends(require_roles([UserRole.ADMIN]))
+):
+    """POST /api/admissions/{id}/convert — create a Student row from an accepted Admission.
+    Marks the admission status='enrolled' and links it. Role: superuser/admin."""
+    query = {"id": admission_id, "school_code": current_user["school_code"]}
+    adm = await db.admissions.find_one(query, {"_id": 0})
+    if not adm:
+        raise HTTPException(status_code=404, detail="Admission record not found")
+    if adm.get("converted_student_id"):
+        existing = await db.students.find_one({"id": adm["converted_student_id"]}, {"_id": 0})
+        if existing:
+            existing["age"] = calculate_age(existing.get("date_of_birth", ""))
+            return StudentResponse(**existing)
+
+    now = datetime.now(timezone.utc).isoformat()
+    student_id = str(uuid.uuid4())
+    student_doc = {
+        "id": student_id,
+        "school_code": current_user["school_code"],
+        "student_id": "",  # admin can fill later
+        "first_name": adm.get("student_first_name", ""),
+        "middle_name": adm.get("student_middle_name", ""),
+        "last_name": adm.get("student_last_name", ""),
+        "date_of_birth": adm.get("student_dob", ""),
+        "gender": adm.get("student_gender", ""),
+        "student_phone": "",
+        "student_email": "",
+        "address_line1": "",
+        "address_line2": "",
+        "city_state": "",
+        "country": "",
+        "house": "",
+        "class_id": None,
+        "emergency_contact": adm.get("parent_phone", ""),
+        "teacher_comment": "",
+        "photo_url": "",
+        "family_members": [
+            {
+                "id": str(uuid.uuid4()),
+                "first_name": adm.get("parent_name", ""),
+                "last_name": "",
+                "relationship": "Guardian",
+                "email": adm.get("parent_email", ""),
+                "cell_phone": adm.get("parent_phone", ""),
+            }
+        ],
+        "address": "",
+        "parent_id": None,
+        "enrollment_status": "enrolled",
+        "age": calculate_age(adm.get("student_dob", "")),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.students.insert_one(dict(student_doc))
+    await db.admissions.update_one(
+        query, {"$set": {"status": "enrolled", "converted_student_id": student_id, "updated_at": now}}
+    )
+    await write_audit(
+        current_user,
+        "convert",
+        "admission",
+        admission_id,
+        f"{adm.get('student_first_name','')} {adm.get('student_last_name','')}",
+        {"new_student_id": student_id},
+    )
+    return StudentResponse(**student_doc)
 
 
 # ==================== TEACHER/PARENT LISTS ====================

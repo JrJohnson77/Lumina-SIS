@@ -20,7 +20,10 @@ import {
     Plus,
     Trash2,
     ChevronDown,
-    ChevronRight
+    ChevronRight,
+    BarChart3,
+    Lock,
+    Unlock
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -83,6 +86,8 @@ export default function GradebookPage() {
     const [template, setTemplate] = useState(null);
     const [savingSettings, setSavingSettings] = useState(false);
     const [expandedSubject, setExpandedSubject] = useState(null);
+    const [distribution, setDistribution] = useState(null);
+    const [lockToggling, setLockToggling] = useState(false);
     
     const { isAdmin, isTeacher, isParent, schoolCode, isSuperuser } = useAuth();
 
@@ -145,6 +150,45 @@ export default function GradebookPage() {
             setSubjects(DEFAULT_SUBJECTS);
         }
     }, [template]);
+
+    useEffect(() => {
+        if (selectedClass && selectedTerm && selectedYear) {
+            fetchDistribution();
+        } else {
+            setDistribution(null);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedClass, selectedTerm, selectedYear, existingGradebook]);
+
+    const fetchDistribution = async () => {
+        try {
+            const res = await axios.get(`${API}/gradebook/${selectedClass}/distribution`, {
+                params: { term: selectedTerm, academic_year: selectedYear },
+            });
+            setDistribution(res.data);
+        } catch (_e) {
+            setDistribution(null);
+        }
+    };
+
+    const handleToggleLock = async () => {
+        if (!existingGradebook?.id) return;
+        setLockToggling(true);
+        try {
+            if (existingGradebook.is_locked) {
+                await axios.post(`${API}/gradebook/${existingGradebook.id}/unlock`);
+                toast.success('Gradebook unlocked');
+            } else {
+                await axios.post(`${API}/gradebook/${existingGradebook.id}/lock`);
+                toast.success('Gradebook locked');
+            }
+            fetchExistingGrades();
+        } catch (error) {
+            toast.error(error?.response?.data?.detail || 'Failed to change lock state');
+        } finally {
+            setLockToggling(false);
+        }
+    };
 
     useEffect(() => {
         if (selectedClass) {
@@ -632,11 +676,41 @@ export default function GradebookPage() {
                 </CardContent>
             </Card>
 
+            {/* Class Grade Distribution (live chart) */}
+            {selectedClass && distribution && distribution.total > 0 && (
+                <Card className="rounded-2xl border-border shadow-sm" data-testid="grade-distribution-card">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <BarChart3 className="w-4 h-4 text-primary" />
+                            Class grade distribution — {selectedTerm}, {selectedYear}
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-end gap-3 h-32">
+                            {['A', 'B', 'C', 'D', 'E', 'U'].map((letter) => {
+                                const count = distribution.buckets[letter] || 0;
+                                const pct = distribution.total > 0 ? (count / distribution.total) * 100 : 0;
+                                const colorMap = { A: 'bg-emerald-500', B: 'bg-sky-500', C: 'bg-amber-500', D: 'bg-orange-500', E: 'bg-rose-500', U: 'bg-slate-400' };
+                                return (
+                                    <div key={letter} className="flex-1 flex flex-col items-center justify-end gap-1" data-testid={`dist-bar-${letter}`}>
+                                        <div className="text-xs font-bold">{count}</div>
+                                        <div className={`w-full rounded-t ${colorMap[letter]} transition-all`} style={{ height: `${Math.max(4, pct)}%`, minHeight: count > 0 ? '8px' : '2px' }} />
+                                        <div className="text-xs font-medium text-muted-foreground">{letter}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-3">
+                            {distribution.total} student{distribution.total !== 1 ? 's' : ''} graded in this term.
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Student Info Card */}
             {selectedStudentData && (
                 <Card className="rounded-2xl border-border shadow-sm bg-primary/5">
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-4">
+                    <CardContent className="p-6">                        <div className="flex items-center gap-4">
                             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
                                 <User className="w-8 h-8 text-primary" />
                             </div>
@@ -652,15 +726,42 @@ export default function GradebookPage() {
                             </div>
                             {existingGradebook && (
                                 <div className="ml-auto text-right">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 justify-end">
                                         <Award className={`w-5 h-5 ${getGradeColor(existingGradebook.overall_grade)}`} />
                                         <span className={`text-2xl font-bold ${getGradeColor(existingGradebook.overall_grade)}`}>
                                             {existingGradebook.overall_grade}
                                         </span>
+                                        {existingGradebook.is_locked ? (
+                                            <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800" data-testid="gradebook-locked-badge">
+                                                <Lock className="w-3 h-3 mr-1" />LOCKED
+                                            </span>
+                                        ) : null}
                                     </div>
                                     <p className="text-sm text-muted-foreground">
                                         Overall: {existingGradebook.overall_score?.toFixed(1)}%
                                     </p>
+                                    {/* Live running-average progress bar */}
+                                    <div className="mt-2 w-48 h-2 rounded-full bg-muted overflow-hidden">
+                                        <div
+                                            className={`h-full transition-all ${existingGradebook.overall_score >= 70 ? 'bg-green-500' : existingGradebook.overall_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                            style={{ width: `${Math.min(100, Math.max(0, existingGradebook.overall_score || 0))}%` }}
+                                            data-testid="gradebook-progress-bar"
+                                        />
+                                    </div>
+                                    {/* Lock/Unlock button */}
+                                    {(isAdmin || (isTeacher && !existingGradebook.is_locked)) ? (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="rounded-lg mt-2"
+                                            onClick={handleToggleLock}
+                                            disabled={lockToggling || (isTeacher && existingGradebook.is_locked)}
+                                            data-testid="gradebook-lock-toggle"
+                                        >
+                                            {lockToggling ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : (existingGradebook.is_locked ? <Unlock className="w-3.5 h-3.5 mr-1.5" /> : <Lock className="w-3.5 h-3.5 mr-1.5" />)}
+                                            {existingGradebook.is_locked ? 'Unlock period' : 'Lock period'}
+                                        </Button>
+                                    ) : null}
                                 </div>
                             )}
                         </div>

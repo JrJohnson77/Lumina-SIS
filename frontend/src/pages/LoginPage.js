@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -13,7 +13,7 @@ export default function LoginPage() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     
-    const { login } = useAuth();
+    const { login, getLastPage } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
@@ -23,7 +23,7 @@ export default function LoginPage() {
         try {
             await login(schoolCode, username, password);
             toast.success('Welcome back!');
-            navigate('/dashboard');
+            navigate(getLastPage());
         } catch (error) {
             const message = error.response?.data?.detail || 'Invalid credentials';
             toast.error(message);
@@ -170,7 +170,10 @@ export default function LoginPage() {
                         </Button>
                     </form>
                     
-                    <div className="mt-8 text-center">
+                    <div className="mt-8 text-center space-y-2">
+                        <Link to="/forgot-password" className="text-sm text-primary hover:underline" data-testid="forgot-password-link">
+                            Forgot your password?
+                        </Link>
                         <p className="text-sm text-muted-foreground">
                             Contact your school administrator for login credentials
                         </p>

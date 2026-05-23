@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { 
     Plus, 
     Search, 
@@ -48,6 +49,8 @@ export default function GradesPage() {
     const [filterTerm, setFilterTerm] = useState('');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingGrade, setEditingGrade] = useState(null);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleting, setDeleting] = useState(false);
     const [formData, setFormData] = useState(initialFormData);
     const [submitting, setSubmitting] = useState(false);
     const { isAdmin, isTeacher, isParent } = useAuth();
@@ -118,15 +121,18 @@ export default function GradesPage() {
         setIsDialogOpen(true);
     };
 
-    const handleDelete = async (gradeId) => {
-        if (!window.confirm('Are you sure you want to delete this grade?')) return;
-        
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await axios.delete(`${API}/grades/${gradeId}`);
-            toast.success('Grade deleted');
+            await axios.delete(`${API}/grades/${deleteTarget.id}`);
+            toast.success(`Grade for "${deleteTarget.name}" deleted`);
+            setDeleteTarget(null);
             fetchData();
         } catch (error) {
-            toast.error('Failed to delete grade');
+            toast.error(error?.response?.data?.detail || 'Failed to delete grade');
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -467,7 +473,7 @@ export default function GradesPage() {
                                                         variant="ghost" 
                                                         size="sm"
                                                         className="text-destructive hover:bg-destructive/10"
-                                                        onClick={() => handleDelete(grade.id)}
+                                                        onClick={() => setDeleteTarget({ id: grade.id, name: getStudentName(grade.student_id) })}
                                                         data-testid={`delete-grade-${grade.id}`}
                                                     >
                                                         <Trash2 className="w-4 h-4" />
@@ -498,6 +504,19 @@ export default function GradesPage() {
                     </CardContent>
                 </Card>
             )}
+
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+                title="Delete grade"
+                recordName={deleteTarget?.name}
+                message="The grade entry will be permanently removed."
+                confirmLabel="Delete"
+                destructive
+                submitting={deleting}
+                onConfirm={handleDelete}
+                testIdPrefix="grade-delete-confirm"
+            />
         </div>
     );
 }
