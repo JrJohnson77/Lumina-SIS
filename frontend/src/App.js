@@ -63,7 +63,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 };
 
 const PublicRoute = ({ children }) => {
-    const { isAuthenticated, loading } = useAuth();
+    const { isAuthenticated, loading, getLastPage } = useAuth();
     
     if (loading) {
         return (
@@ -74,7 +74,7 @@ const PublicRoute = ({ children }) => {
     }
     
     if (isAuthenticated) {
-        return <Navigate to="/dashboard" replace />;
+        return <Navigate to={getLastPage()} replace />;
     }
     
     return children;
@@ -237,6 +237,10 @@ function AppRoutes() {
                         <AuditLogPage />
                     </ProtectedRoute>
                 } 
+            />
+            <Route 
+                path="/reports" 
+                element={<Navigate to="/report-cards" replace />}
             />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

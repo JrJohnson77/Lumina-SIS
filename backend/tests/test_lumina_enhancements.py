@@ -371,11 +371,12 @@ class TestAdmissionsConvert:
         sid1 = student["id"]
         assert student["enrollment_status"] == "enrolled"
 
-        # admission row should now show enrolled. NOTE: AdmissionResponse model
-        # doesn't expose converted_student_id (minor backend issue – see report).
+        # admission row should now show enrolled and expose converted_student_id
         r = requests.get(f"{API}/admissions/{adm_id}", headers=_h(sunf_admin_token), timeout=15)
         adm_row = r.json()
         assert adm_row.get("status") == "enrolled"
+        assert adm_row.get("converted_student_id") == sid1, \
+            f"converted_student_id missing or mismatched: {adm_row.get('converted_student_id')} vs {sid1}"
 
         # idempotent
         r = requests.post(f"{API}/admissions/{adm_id}/convert", headers=_h(sunf_admin_token), timeout=15)

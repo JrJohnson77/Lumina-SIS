@@ -2321,6 +2321,7 @@ class AdmissionResponse(AdmissionBase):
     id: str
     school_code: str
     created_by: Optional[str] = ""
+    converted_student_id: Optional[str] = None
     created_at: str
     updated_at: str
 
