@@ -493,7 +493,10 @@ DEFAULT_WEIGHTS = {
 }
 
 def build_default_template(school_code: str, school_name: str) -> dict:
-    """Build a default report template for a new school"""
+    """Build the Lumina-SIS default report template for a new school.
+    `design_mode='lumina_default'` tells the frontend to render
+    the polished LuminaDefaultReportCard component instead of the
+    legacy canvas/block renderers."""
     return {
         "id": str(uuid.uuid4()),
         "school_code": school_code,
@@ -502,6 +505,8 @@ def build_default_template(school_code: str, school_name: str) -> dict:
         "logo_url": "",
         "header_text": "REPORT CARD",
         "sub_header_text": "",
+        "design_mode": "lumina_default",
+        "is_locked_default": True,  # default cannot be deleted, only duplicated/replaced
         "subjects": DEFAULT_SUBJECTS,
         "grade_scale": DEFAULT_GRADE_SCALE,
         "use_weighted_grading": False,
@@ -1103,6 +1108,34 @@ async def update_report_template(
         await db.report_templates.insert_one(update_doc)
         update_doc.pop("_id", None)
         return update_doc
+
+@api_router.post("/report-templates/{school_code}/reset-default")
+async def reset_report_template_to_default(
+    school_code: str,
+    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN])),
+):
+    """Reset the school's report template back to the Lumina default.
+    Clears any canvas customizations. Superuser or school admin."""
+    sc = school_code.upper()
+    if current_user["role"] != UserRole.SUPERUSER and current_user["school_code"] != sc:
+        raise HTTPException(status_code=403, detail="Cross-tenant access denied")
+    school = await db.schools.find_one({"school_code": sc}, {"_id": 0})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    default = build_default_template(sc, school.get("name", sc))
+    await db.report_templates.update_one(
+        {"school_code": sc},
+        {"$set": {
+            **default,
+            "canvas_elements": [],
+            "blocks": [],
+        }},
+        upsert=True,
+    )
+    await write_audit(current_user, "reset", "report_template", sc, f"{sc} reset to Lumina default")
+    updated = await db.report_templates.find_one({"school_code": sc}, {"_id": 0})
+    return updated
+
 
 # ==================== USER MANAGEMENT ====================
 

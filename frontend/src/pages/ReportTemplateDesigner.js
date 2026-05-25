@@ -12,7 +12,7 @@ import {
     Save, Loader2, ArrowLeft, Plus, Trash2, Type, Image, Minus, Move,
     Table, PenTool, Square, Heart, Upload, ZoomIn, ZoomOut, Copy,
     AlignLeft, AlignCenter, AlignRight, Bold, Italic, Underline, Lock, Unlock, Grid,
-    Undo, Clipboard, GripVertical, Settings
+    Undo, Clipboard, GripVertical, Settings, Sparkles
 } from 'lucide-react';
 
 // ==================== GRID & SNAP SETTINGS ====================
@@ -514,6 +514,7 @@ export default function ReportTemplateDesigner({ schoolCodeProp, embedded = fals
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [resettingDefault, setResettingDefault] = useState(false);
     const [elements, setElements] = useState([]);
     const [selectedId, setSelectedId] = useState(null);
     const [paperSize, setPaperSize] = useState('legal');
@@ -564,6 +565,23 @@ export default function ReportTemplateDesigner({ schoolCodeProp, embedded = fals
     }, [schoolCode]);
 
     useEffect(() => { fetchTemplate(); }, [fetchTemplate]);
+
+    // ---- Reset to Lumina default ----
+    const handleResetToDefault = async () => {
+        if (!window.confirm("Reset this school's report card to the Lumina default template? Your current canvas customizations will be cleared.")) return;
+        setResettingDefault(true);
+        try {
+            const res = await axios.post(`${API}/report-templates/${schoolCode}/reset-default`);
+            toast.success('Reverted to Lumina default. The new template will appear on the next report card generation.');
+            // Clear the live canvas to reflect the reset
+            setElements([]);
+            setBackgroundUrl('');
+        } catch (error) {
+            toast.error(error?.response?.data?.detail || 'Failed to reset template');
+        } finally {
+            setResettingDefault(false);
+        }
+    };
 
     // ---- Save template ----
     const handleSave = async () => {
@@ -1051,6 +1069,9 @@ export default function ReportTemplateDesigner({ schoolCodeProp, embedded = fals
                         <Button variant="ghost" size="sm" onClick={()=>setZoom(2)} className={`h-5 px-1.5 text-[9px] ${zoom === 2 ? 'bg-muted' : ''}`} title="200%">200</Button>
                         <Button variant="ghost" size="sm" onClick={handleResetView} className="h-5 px-1.5 text-[9px]" title="Reset View">Reset</Button>
                     </div>
+                    <Button onClick={handleResetToDefault} disabled={resettingDefault} variant="outline" className="rounded-full h-7 px-3 text-xs" data-testid="reset-default-btn" title="Reset to Lumina default">
+                        {resettingDefault ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}Lumina default
+                    </Button>
                     <Button onClick={handleSave} disabled={saving} className="rounded-full h-7 px-4 text-xs" data-testid="save-template-btn">
                         {saving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}Save
                     </Button>

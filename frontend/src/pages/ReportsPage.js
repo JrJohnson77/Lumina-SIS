@@ -20,6 +20,7 @@ import {
     Unlock
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
+import LuminaDefaultReportCard from '../components/LuminaDefaultReportCard';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -298,10 +299,21 @@ const CanvasReportCard = ({ data, classInfo, term, academicYear, totalStudents, 
 // ==================== DYNAMIC REPORT CARD (dispatch) ====================
 const ReportCardRenderer = (props) => {
     const { template } = props;
-    if (template?.design_mode === 'canvas' && template?.canvas_elements?.length) {
+    // Lumina default — the polished pre-built template, used by every school
+    // until they explicitly customize via the WYSIWYG designer.
+    if (!template || template.design_mode === 'lumina_default') {
+        return <LuminaDefaultReportCard {...props} />;
+    }
+    // Custom canvas template from the designer
+    if (template.design_mode === 'canvas' && template.canvas_elements?.length) {
         return <CanvasReportCard {...props} />;
     }
-    return <DynamicReportCard {...props} />;
+    // Legacy block-based template
+    if (template.design_mode === 'blocks' && template.blocks?.length) {
+        return <DynamicReportCard {...props} />;
+    }
+    // Fallback: Lumina default
+    return <LuminaDefaultReportCard {...props} />;
 };
 
 // ==================== BLOCK-BASED REPORT CARD TEMPLATE ====================
@@ -786,6 +798,7 @@ export default function ReportsPage() {
     const [totalStudentsInClass, setTotalStudentsInClass] = useState(0);
     const [reportSignatures, setReportSignatures] = useState({});
     const [reportTemplate, setReportTemplate] = useState(null);
+    const [reportSchool, setReportSchool] = useState(null);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [exportingPdf, setExportingPdf] = useState(false);
@@ -808,6 +821,7 @@ export default function ReportsPage() {
             const requests = [
                 axios.get(`${API}/classes`),
                 axios.get(`${API}/grading-scheme`),
+                axios.get(`${API}/schools`),
             ];
             if (schoolCode) {
                 requests.push(axios.get(`${API}/report-templates/${schoolCode}`));
@@ -815,8 +829,12 @@ export default function ReportsPage() {
             const results = await Promise.all(requests);
             setClasses(results[0].data);
             setGradingScheme(results[1].data.grading_scheme || []);
-            if (results[2]) {
-                setReportTemplate(results[2].data);
+            // Schools — pick the one matching the current user's school_code
+            const schools = results[2].data || [];
+            const ownSchool = schools.find((s) => s.school_code === schoolCode) || schools[0];
+            setReportSchool(ownSchool || null);
+            if (results[3]) {
+                setReportTemplate(results[3].data);
             }
         } catch (error) {
             toast.error('Failed to load data');
@@ -926,7 +944,19 @@ export default function ReportsPage() {
             }
 
             const classLabel = selectedClassInfo?.name || 'Report';
-            pdf.save(`${classLabel}_${selectedTerm}_${selectedYear}.pdf`);
+            // Per spec: [LastName]_[FirstName]_ReportCard_[Term]_[AcademicYear].pdf
+            // when generating a single student's card; class export when batch.
+            let filename;
+            if (activeTab === 'term-reports' && reportCards.length === 1) {
+                const s = reportCards[0]?.student || {};
+                const last = (s.last_name || 'Student').replace(/\s+/g, '');
+                const first = (s.first_name || '').replace(/\s+/g, '');
+                const safeTerm = String(selectedTerm).replace(/\s+/g, '');
+                filename = `${last}_${first}_ReportCard_${safeTerm}_${selectedYear}.pdf`;
+            } else {
+                filename = `${classLabel}_${selectedTerm}_${selectedYear}.pdf`.replace(/\s+/g, '_');
+            }
+            pdf.save(filename);
             toast.success('PDF exported successfully');
         } catch (error) {
             console.error('PDF export error:', error);
@@ -1286,6 +1316,7 @@ export default function ReportsPage() {
                                             totalStudents={totalStudentsInClass}
                                             signatures={reportSignatures}
                                             template={reportTemplate}
+                                            school={reportSchool}
                                         />
                                     </div>
                                 );
