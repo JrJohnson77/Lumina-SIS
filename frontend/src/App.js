@@ -177,7 +177,7 @@ function AppRoutes() {
             <Route 
                 path="/report-template" 
                 element={
-                    <ProtectedRoute allowedRoles={['superuser']}>
+                    <ProtectedRoute allowedRoles={['superuser', 'admin']}>
                         <ReportTemplateDesigner />
                     </ProtectedRoute>
                 } 

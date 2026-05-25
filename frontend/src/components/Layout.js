@@ -95,7 +95,7 @@ const NAV_GROUPS = [
         items: [
             { to: '/schools', label: 'Schools', icon: Building2, roles: ['superuser'] },
             { to: '/import-export', label: 'Import / Export', icon: FolderInput, roles: ['superuser', 'admin'] },
-            { to: '/report-template', label: 'Report Designer', icon: FileText, roles: ['superuser'] },
+            { to: '/report-template', label: 'Report Designer', icon: FileText, roles: ['superuser', 'admin'] },
             { to: '/audit-logs', label: 'Audit Log', icon: History, roles: ['superuser', 'admin'] },
         ],
     },

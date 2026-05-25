@@ -509,8 +509,9 @@ const SocialSkillsPropEditor = ({ config, onChange }) => {
 export default function ReportTemplateDesigner({ schoolCodeProp, embedded = false }) {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const schoolCode = schoolCodeProp || searchParams.get('school');
-    const { isSuperuser } = useAuth();
+    const { isSuperuser, schoolCode: ownSchoolCode } = useAuth();
+    // Priority: explicit prop > ?school= query param > current user's own school
+    const schoolCode = schoolCodeProp || searchParams.get('school') || ownSchoolCode;
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
