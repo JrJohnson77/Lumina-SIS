@@ -61,20 +61,37 @@ export default function DashboardPage() {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [recentStudents, setRecentStudents] = useState([]);
+    const [myClasses, setMyClasses] = useState([]);
     const { user, isAdmin, isTeacher, isParent } = useAuth();
 
     useEffect(() => {
         fetchDashboardData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchDashboardData = async () => {
         try {
-            const [statsRes, studentsRes] = await Promise.all([
+            const requests = [
                 axios.get(`${API}/stats/dashboard`),
                 axios.get(`${API}/students`)
-            ]);
-            setStats(statsRes.data);
-            setRecentStudents(studentsRes.data.slice(0, 5));
+            ];
+            if (isTeacher) {
+                requests.push(axios.get(`${API}/classes`));
+            }
+            const results = await Promise.all(requests);
+            setStats(results[0].data);
+            const studentsData = results[1].data || [];
+            setRecentStudents(studentsData.slice(0, 5));
+
+            if (isTeacher && results[2]) {
+                const classes = results[2].data || [];
+                // attach student count per class
+                const enriched = classes.map(c => ({
+                    ...c,
+                    student_count: studentsData.filter(s => s.class_id === c.id).length
+                }));
+                setMyClasses(enriched);
+            }
         } catch (error) {
             toast.error('Failed to load dashboard data');
         } finally {
@@ -109,29 +126,34 @@ export default function DashboardPage() {
                 <div className="bento-grid mb-6">
                     <StatCard 
                         icon={GraduationCap} 
-                        title="Total Students" 
+                        title={isTeacher ? "My Students" : "Total Students"} 
                         value={stats?.total_students || 0}
+                        subtitle={isTeacher ? "In your classes" : undefined}
                         color="primary"
                         delay={50}
                     />
                     <StatCard 
                         icon={School} 
-                        title="Total Classes" 
+                        title={isTeacher ? "My Classes" : "Total Classes"} 
                         value={stats?.total_classes || 0}
+                        subtitle={isTeacher ? "Assigned to you" : undefined}
                         color="warning"
                         delay={100}
                     />
-                    <StatCard 
-                        icon={Users} 
-                        title="Teachers" 
-                        value={stats?.total_teachers || 0}
-                        color="success"
-                        delay={150}
-                    />
+                    {!isTeacher && (
+                        <StatCard 
+                            icon={Users} 
+                            title="Teachers" 
+                            value={stats?.total_teachers || 0}
+                            color="success"
+                            delay={150}
+                        />
+                    )}
                     <StatCard 
                         icon={TrendingUp} 
-                        title="Average Grade" 
+                        title={isTeacher ? "Class Average" : "Average Grade"} 
                         value={`${stats?.average_grade || 0}%`}
+                        subtitle={isTeacher ? "Across your students" : undefined}
                         color="primary"
                         delay={200}
                     />
@@ -141,7 +163,9 @@ export default function DashboardPage() {
             {/* Today's Attendance (Admin/Teacher) */}
             {(isAdmin || isTeacher) && (
                 <div className="mb-6">
-                    <h2 className="text-lg font-bold mb-3 text-foreground">Today's Attendance</h2>
+                    <h2 className="text-lg font-bold mb-3 text-foreground">
+                        {isTeacher ? "Today's Attendance — My Classes" : "Today's Attendance"}
+                    </h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <StatCard 
                             icon={UserCheck} 
@@ -204,13 +228,53 @@ export default function DashboardPage() {
                 </div>
             )}
 
+            {/* Teacher: My Classes panel */}
+            {isTeacher && myClasses.length > 0 && (
+                <Card 
+                    className="rounded-2xl border-border shadow-sm opacity-0 animate-fade-in mb-6"
+                    style={{ animationDelay: '380ms' }}
+                    data-testid="teacher-my-classes-card"
+                >
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                            <School className="w-5 h-5 text-primary" />
+                            My Classes
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {myClasses.map((c) => (
+                                <div 
+                                    key={c.id}
+                                    className="p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-muted/40 transition-colors"
+                                    data-testid={`teacher-class-${c.id}`}
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-sm text-foreground truncate">{c.name}</p>
+                                            <p className="text-xs text-muted-foreground">Grade {c.grade_level} · {c.academic_year}</p>
+                                        </div>
+                                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-semibold whitespace-nowrap">
+                                            {c.student_count} {c.student_count === 1 ? 'student' : 'students'}
+                                        </span>
+                                    </div>
+                                    {c.room_number && (
+                                        <p className="text-[11px] text-muted-foreground mt-1.5">Room {c.room_number}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Recent Students */}
             {recentStudents.length > 0 && (
                 <Card className="rounded-2xl border-border shadow-sm opacity-0 animate-fade-in" style={{ animationDelay: '400ms' }}>
                     <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-lg">
                             <GraduationCap className="w-5 h-5 text-primary" />
-                            {isParent ? 'My Children' : 'Recent Students'}
+                            {isParent ? 'My Children' : isTeacher ? 'My Students' : 'Recent Students'}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -243,11 +307,15 @@ export default function DashboardPage() {
                     <CardContent className="py-16">
                         <div className="empty-state">
                             <GraduationCap className="empty-state-icon" />
-                            <h3 className="text-base font-semibold mb-1.5">No students yet</h3>
+                            <h3 className="text-base font-semibold mb-1.5">
+                                {isTeacher ? 'No classes assigned yet' : 'No students yet'}
+                            </h3>
                             <p className="text-sm text-muted-foreground max-w-sm">
                                 {isParent 
                                     ? 'No children have been assigned to your account yet.' 
-                                    : 'Start by adding students to the system.'}
+                                    : isTeacher
+                                        ? 'You have not been assigned to any classes yet. Please contact your administrator.'
+                                        : 'Start by adding students to the system.'}
                             </p>
                         </div>
                     </CardContent>

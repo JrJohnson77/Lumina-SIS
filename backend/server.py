@@ -2307,23 +2307,57 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
     school_code = current_user["school_code"]
     
     if current_user["role"] in [UserRole.SUPERUSER, UserRole.ADMIN, UserRole.TEACHER]:
-        stats["total_students"] = await db.students.count_documents({"school_code": school_code})
-        stats["total_classes"] = await db.classes.count_documents({"school_code": school_code})
-        stats["total_teachers"] = await db.users.count_documents({"school_code": school_code, "role": UserRole.TEACHER})
-        
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        today_attendance = await db.attendance.find({"date": today, "school_code": school_code}, {"_id": 0}).to_list(10000)
+
+        if current_user["role"] == UserRole.TEACHER:
+            # Scope all stats to the teacher's assigned classes/students
+            teacher_class_ids = await get_teacher_class_ids(current_user)
+            teacher_student_ids = await get_teacher_student_ids(current_user)
+
+            stats["total_students"] = len(teacher_student_ids)
+            stats["total_classes"] = len(teacher_class_ids)
+            # For teachers, show total teachers in their school as context
+            stats["total_teachers"] = await db.users.count_documents(
+                {"school_code": school_code, "role": UserRole.TEACHER}
+            )
+
+            if teacher_student_ids:
+                today_attendance = await db.attendance.find(
+                    {
+                        "date": today,
+                        "school_code": school_code,
+                        "student_id": {"$in": teacher_student_ids},
+                    },
+                    {"_id": 0},
+                ).to_list(10000)
+            else:
+                today_attendance = []
+
+            if teacher_student_ids:
+                recent_grades = await db.gradebook.find(
+                    {"school_code": school_code, "student_id": {"$in": teacher_student_ids}},
+                    {"_id": 0, "overall_score": 1},
+                ).to_list(500)
+            else:
+                recent_grades = []
+        else:
+            stats["total_students"] = await db.students.count_documents({"school_code": school_code})
+            stats["total_classes"] = await db.classes.count_documents({"school_code": school_code})
+            stats["total_teachers"] = await db.users.count_documents({"school_code": school_code, "role": UserRole.TEACHER})
+
+            today_attendance = await db.attendance.find({"date": today, "school_code": school_code}, {"_id": 0}).to_list(10000)
+            recent_grades = await db.gradebook.find({"school_code": school_code}, {"_id": 0, "overall_score": 1}).to_list(100)
+
         stats["today_present"] = len([a for a in today_attendance if a["status"] == "present"])
         stats["today_absent"] = len([a for a in today_attendance if a["status"] == "absent"])
         stats["today_late"] = len([a for a in today_attendance if a["status"] == "late"])
-        
-        recent_grades = await db.gradebook.find({"school_code": school_code}, {"_id": 0, "overall_score": 1}).to_list(100)
+
         if recent_grades:
             avg = sum(g.get("overall_score", 0) for g in recent_grades) / len(recent_grades)
             stats["average_grade"] = round(avg, 1)
         else:
             stats["average_grade"] = 0
-        
+
         # Superuser stats
         if current_user["role"] == UserRole.SUPERUSER:
             stats["total_schools"] = await db.schools.count_documents({})
