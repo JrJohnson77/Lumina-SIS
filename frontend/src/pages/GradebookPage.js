@@ -131,6 +131,8 @@ export default function GradebookPage() {
     const normalizedRatings = tplSkillRatings.map(r => 
         typeof r === 'string' ? { code: r, label: r } : r
     );
+    // School-specific label for assessment/grading scale headers
+    const schoolLabel = template?.school_name || schoolCode || 'School';
 
     useEffect(() => {
         fetchInitialData();
@@ -785,10 +787,10 @@ export default function GradebookPage() {
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <BookOpen className="w-5 h-5" />
-                                    MHPS Assessment Entry
+                                    {schoolLabel} Assessment Entry
                                 </CardTitle>
                                 <p className="text-sm text-muted-foreground">
-                                    Weights: HW 5% | GW 5% | Project 10% | Quiz 10% | Mid-Term 30% | End of Term 40%
+                                    Weights: {tplComponents.map(c => `${c.label} ${c.weight}%`).join(' | ')}
                                 </p>
                             </CardHeader>
                             <CardContent>
@@ -961,7 +963,7 @@ export default function GradebookPage() {
             {useMHPSMode && (
                 <Card className="rounded-2xl border-border shadow-sm">
                     <CardHeader>
-                        <CardTitle className="text-sm">MHPS Grading Scale</CardTitle>
+                        <CardTitle className="text-sm">{schoolLabel} Grading Scale</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-4 md:grid-cols-8 gap-2 text-xs">
