@@ -627,6 +627,19 @@ async def get_teacher_student_ids(current_user: dict) -> List[str]:
     ).to_list(5000)
     return [s["id"] for s in students]
 
+
+def sort_students_by_name(students: List[dict]) -> List[dict]:
+    """Sort a list of student dicts ascending by last_name, then first_name,
+    then middle_name (case-insensitive). Used by every list/report endpoint
+    that returns students so output ordering is predictable across the app."""
+    def _key(s: dict):
+        return (
+            (s.get("last_name") or "").strip().lower(),
+            (s.get("first_name") or "").strip().lower(),
+            (s.get("middle_name") or "").strip().lower(),
+        )
+    return sorted(students, key=_key)
+
 # ==================== STARTUP - Create Superuser ====================
 
 @app.on_event("startup")
@@ -1368,6 +1381,7 @@ async def get_students(
     for s in students:
         s["age"] = calculate_age(s.get("date_of_birth", ""))
     
+    students = sort_students_by_name(students)
     return [StudentResponse(**s) for s in students]
 
 @api_router.get("/students/{student_id}", response_model=StudentResponse)
@@ -1872,6 +1886,7 @@ async def get_class_report_cards(
         {"class_id": class_id, "school_code": current_user["school_code"]}, 
         {"_id": 0}
     ).to_list(100)
+    students = sort_students_by_name(students)
     
     report_cards = []
     for student in students:
@@ -2983,6 +2998,7 @@ async def enrollment_preview(
         },
         {"_id": 0},
     ).to_list(5000)
+    students = sort_students_by_name(students)
 
     def _suggest(current_class: dict):
         cur_num = _extract_grade_number(current_class.get("grade_level", ""))
@@ -3495,6 +3511,7 @@ async def send_report_cards(
     if payload.student_ids:
         q["id"] = {"$in": payload.student_ids}
     students = await db.students.find(q, {"_id": 0}).to_list(2000)
+    students = sort_students_by_name(students)
 
     sent = 0
     skipped_no_email = 0
