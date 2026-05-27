@@ -3124,6 +3124,38 @@ async def list_audit_logs(
 # Fallback: if Resend is not configured or send fails, the token is logged to the
 # backend stdout so a developer can recover it from the logs.
 
+async def _send_report_card_email(to_email: str, parent_name: str, student_name: str, term: str, academic_year: str, school_name: str) -> bool:
+    """Notify a parent that their child's report card is ready. Returns True on success."""
+    if not RESEND_API_KEY or not to_email:
+        return False
+    subject = f"{student_name}'s report card · {term} {academic_year}"
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1f2937;">
+      <h2 style="margin:0 0 12px;font-size:20px;color:#111827;">Hi {parent_name or 'Parent'},</h2>
+      <p style="font-size:15px;line-height:1.55;color:#374151;margin:0 0 14px;">
+        <strong>{student_name}</strong>'s report card for <strong>{term}, {academic_year}</strong>
+        has been published by <strong>{school_name}</strong>.
+      </p>
+      <p style="font-size:14px;line-height:1.55;color:#374151;margin:0 0 14px;">
+        Please log in to Lumina-SIS to review your child's grades, attendance, and teacher comments.
+        If you have any questions, contact the school office.
+      </p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
+      <p style="font-size:11px;color:#9ca3af;margin:0;">Sent by Lumina-SIS · {school_name}</p>
+    </div>
+    """
+    try:
+        await asyncio.to_thread(
+            resend.Emails.send,
+            {"from": SENDER_EMAIL, "to": [to_email], "subject": subject, "html": html},
+        )
+        return True
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Resend report-card send failed for {to_email}: {e}")
+        return False
+
+
+
 async def _send_reset_email(to_email: str, user_name: str, school_code: str, token: str) -> bool:
     """Send the password-reset token to the user via Resend.
     Returns True on success, False on failure (so caller can fall back to log)."""
@@ -3397,6 +3429,80 @@ async def list_report_card_locks(
     return [ReportCardLockResponse(**d) for d in docs]
 
 
+class SendReportCardsRequest(BaseModel):
+    class_id: str
+    term: str
+    academic_year: str
+    student_ids: Optional[List[str]] = None  # if None, send for all students in the class
+
+
+@api_router.post("/report-cards/send")
+async def send_report_cards(
+    payload: SendReportCardsRequest,
+    current_user: dict = Depends(require_roles([UserRole.ADMIN, UserRole.TEACHER])),
+):
+    """POST /api/report-cards/send — email a 'report card is ready' notification to
+    every guardian on file for each student in the class (or the optional subset).
+    Role: admin/teacher (teachers must own the class).
+    Returns counts for sent / skipped (no email) / failed."""
+    school_code = current_user["school_code"]
+    # Tenant + class-scope check
+    cls = await db.classes.find_one({"id": payload.class_id, "school_code": school_code}, {"_id": 0})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    if current_user["role"] == UserRole.TEACHER:
+        teacher_class_ids = await get_teacher_class_ids(current_user)
+        if payload.class_id not in teacher_class_ids:
+            raise HTTPException(status_code=403, detail="Class is not in your scope")
+    school = await db.schools.find_one({"school_code": school_code}, {"_id": 0, "name": 1}) or {}
+    school_name = school.get("name", school_code)
+
+    q = {"school_code": school_code, "class_id": payload.class_id}
+    if payload.student_ids:
+        q["id"] = {"$in": payload.student_ids}
+    students = await db.students.find(q, {"_id": 0}).to_list(2000)
+
+    sent = 0
+    skipped_no_email = 0
+    failed = 0
+    for s in students:
+        student_name = f"{s.get('first_name','')} {s.get('last_name','')}".strip()
+        guardians = s.get("family_members") or []
+        emails = [g.get("email", "").strip() for g in guardians if g.get("email")]
+        if not emails:
+            skipped_no_email += 1
+            continue
+        any_ok = False
+        for g in guardians:
+            email = (g.get("email") or "").strip()
+            if not email:
+                continue
+            parent_name = f"{g.get('first_name','')} {g.get('last_name','')}".strip()
+            ok = await _send_report_card_email(
+                email, parent_name, student_name, payload.term, payload.academic_year, school_name
+            )
+            if ok:
+                any_ok = True
+        if any_ok:
+            sent += 1
+        else:
+            failed += 1
+
+    await write_audit(
+        current_user, "send", "report_card", payload.class_id,
+        f"{cls.get('name','')} · {payload.term} · {payload.academic_year}",
+        {"sent": sent, "skipped_no_email": skipped_no_email, "failed": failed, "students": len(students)},
+    )
+    return {
+        "students": len(students),
+        "sent": sent,
+        "skipped_no_email": skipped_no_email,
+        "failed": failed,
+    }
+
+
+
+
 # ==================== ATTENDANCE SUMMARY ====================
 
 @api_router.get("/students/{student_id}/attendance/summary")
@@ -3577,6 +3683,38 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup_migrations():
+    """One-time/idempotent migrations to keep the data in shape."""
+    logger = logging.getLogger(__name__)
+    # Flip any school whose template hasn't been canvas-customized over to the
+    # Lumina default so they see the new pre-built design. We catch:
+    #   - templates with no design_mode set
+    #   - legacy "blocks"/"default" templates
+    #   - canvas templates with zero elements (effectively empty)
+    try:
+        result = await db.report_templates.update_many(
+            {
+                "$or": [
+                    {"design_mode": {"$in": [None, "blocks", "default"]}},
+                    {"design_mode": "canvas", "canvas_elements": {"$exists": False}},
+                    {"design_mode": "canvas", "canvas_elements": {"$size": 0}},
+                ],
+            },
+            {"$set": {
+                "design_mode": "lumina_default",
+                "is_locked_default": True,
+                "canvas_elements": [],
+                "blocks": [],
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        if result.modified_count:
+            logger.info(f"[migration] flipped {result.modified_count} report templates to lumina_default")
+    except Exception as e:
+        logger.warning(f"[migration] report_templates flip failed: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

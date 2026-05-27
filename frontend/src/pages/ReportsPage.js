@@ -1001,25 +1001,22 @@ export default function ReportsPage() {
     };
 
     const handleSendToParents = async () => {
+        if (!selectedClass) return;
         setSending(true);
         try {
-            // Dev mode — log payload + show success toast. Wire to /api/email in prod.
-            const payload = {
+            const res = await axios.post(`${API}/report-cards/send`, {
                 class_id: selectedClass,
-                class_name: classes.find((c) => c.id === selectedClass)?.name || '',
                 term: selectedTerm,
                 academic_year: selectedYear,
-                report_cards: (reportCards || []).map((r) => ({
-                    student_id: r.student_id,
-                    student_name: r.student_name,
-                })),
-            };
-            // eslint-disable-next-line no-console
-            console.info('[SEND-TO-PARENTS] (dev) payload:', payload);
-            await new Promise((res) => setTimeout(res, 400));
-            toast.success(`Queued ${payload.report_cards.length} report card(s) for delivery (dev mode).`);
-        } catch (_e) {
-            toast.error('Failed to queue delivery');
+                student_ids: (reportCards || []).map((r) => r.student?.id || r.student_id).filter(Boolean),
+            });
+            const { sent, skipped_no_email, failed, students } = res.data;
+            const parts = [`${sent}/${students} sent`];
+            if (skipped_no_email) parts.push(`${skipped_no_email} skipped (no email)`);
+            if (failed) parts.push(`${failed} failed`);
+            toast.success(`Notifications: ${parts.join(' · ')}`);
+        } catch (error) {
+            toast.error(error?.response?.data?.detail || 'Failed to send notifications');
         } finally {
             setSending(false);
         }
