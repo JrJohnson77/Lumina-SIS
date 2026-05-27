@@ -911,50 +911,68 @@ export default function ReportsPage() {
         window.print();
     };
 
+    // Letter portrait constants
+    const LETTER_W_IN = 8.5;
+    const LETTER_H_IN = 11.0;
+
+    // Capture each report card div as its own PDF page, preserving order.
+    // Falls back to legacy multi-page slicing when there are no individual cards
+    // (e.g. class-list or gradebook tab).
+    const buildLetterPdf = async () => {
+        const html2canvas = (await import('html2canvas')).default;
+        const { jsPDF } = await import('jspdf');
+        const pdf = new jsPDF('p', 'in', 'letter');
+
+        const cards = printRef.current?.querySelectorAll('.lumina-default-report-card, .canvas-report-card, .dynamic-report-card');
+        if (cards && cards.length > 0) {
+            // One card per page
+            for (let i = 0; i < cards.length; i++) {
+                const cardEl = cards[i];
+                const canvas = await html2canvas(cardEl, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff',
+                });
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                if (i > 0) pdf.addPage('letter', 'portrait');
+                pdf.addImage(imgData, 'JPEG', 0, 0, LETTER_W_IN, LETTER_H_IN);
+            }
+            return pdf;
+        }
+
+        // Fallback for non-card content (legacy)
+        const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true, logging: false });
+        const imgWidth = LETTER_W_IN;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= LETTER_H_IN;
+        while (heightLeft > 0) {
+            position -= LETTER_H_IN;
+            pdf.addPage('letter', 'portrait');
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
+            heightLeft -= LETTER_H_IN;
+        }
+        return pdf;
+    };
+
     const handleExportPdf = async () => {
         if (!printRef.current) return;
         setExportingPdf(true);
         try {
-            const html2canvas = (await import('html2canvas')).default;
-            const { jsPDF } = await import('jspdf');
-
-            const element = printRef.current;
-            const canvas = await html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                logging: false
-            });
-
-            // Legal paper: 8.5 x 14 inches
-            const pdf = new jsPDF('p', 'in', 'legal');
-            const imgWidth = 8.5;
-            const pageHeight = 14;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            let heightLeft = imgHeight;
-            let position = 0;
-
-            pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-
-            while (heightLeft > 0) {
-                position -= pageHeight;
-                pdf.addPage();
-                pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
-            }
-
+            const pdf = await buildLetterPdf();
             const classLabel = selectedClassInfo?.name || 'Report';
-            // Per spec: [LastName]_[FirstName]_ReportCard_[Term]_[AcademicYear].pdf
-            // when generating a single student's card; class export when batch.
+            const safeTerm = String(selectedTerm).replace(/\s+/g, '');
             let filename;
             if (activeTab === 'term-reports' && reportCards.length === 1) {
                 const s = reportCards[0]?.student || {};
                 const last = (s.last_name || 'Student').replace(/\s+/g, '');
                 const first = (s.first_name || '').replace(/\s+/g, '');
-                const safeTerm = String(selectedTerm).replace(/\s+/g, '');
                 filename = `${last}_${first}_ReportCard_${safeTerm}_${selectedYear}.pdf`;
             } else {
-                filename = `${classLabel}_${selectedTerm}_${selectedYear}.pdf`.replace(/\s+/g, '_');
+                filename = `${classLabel}_${safeTerm}_${selectedYear}.pdf`.replace(/\s+/g, '_');
             }
             pdf.save(filename);
             toast.success('PDF exported successfully');
@@ -970,23 +988,7 @@ export default function ReportsPage() {
         if (!printRef.current) return;
         setPreviewBuilding(true);
         try {
-            const html2canvas = (await import('html2canvas')).default;
-            const { jsPDF } = await import('jspdf');
-            const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true, logging: false });
-            const pdf = new jsPDF('p', 'in', 'legal');
-            const imgWidth = 8.5;
-            const pageHeight = 14;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            let heightLeft = imgHeight;
-            let position = 0;
-            pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-            while (heightLeft > 0) {
-                position -= pageHeight;
-                pdf.addPage();
-                pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
-            }
+            const pdf = await buildLetterPdf();
             const blobUrl = pdf.output('bloburl');
             setPreviewSrc(blobUrl.toString());
             setPreviewOpen(true);

@@ -1218,7 +1218,7 @@ export default function ReportTemplateDesigner({ schoolCodeProp, embedded = fals
                                     pointerEvents: 'auto',
                                 }}
                             >
-                                <div style={{ transformOrigin: 'top left', transform: 'scale(0.94)', display: 'inline-block' }}>
+                                <div style={{ transformOrigin: 'top left', display: 'inline-block' }}>
                                     <LuminaDefaultReportCard
                                         data={SAMPLE_REPORT_DATA}
                                         classInfo={SAMPLE_REPORT_DATA.class_info}

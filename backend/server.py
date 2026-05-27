@@ -1814,6 +1814,11 @@ async def get_student_report_card(
         cls = await db.classes.find_one({"id": student["class_id"], "school_code": current_user["school_code"]}, {"_id": 0})
         if cls:
             class_info = cls
+            if cls.get("teacher_id"):
+                teacher = await db.users.find_one({"id": cls["teacher_id"]}, {"_id": 0, "name": 1})
+                if teacher:
+                    class_info["teacher_name"] = teacher.get("name", "")
+            class_info.setdefault("teacher_name", "")
     
     attendance_records = await db.attendance.find({
         "student_id": student_id,
@@ -1851,6 +1856,17 @@ async def get_class_report_cards(
     class_info = await db.classes.find_one(query, {"_id": 0})
     if not class_info:
         raise HTTPException(status_code=404, detail="Class not found")
+    
+    # Enrich class_info with the homeroom teacher's name (joined from users)
+    if class_info.get("teacher_id"):
+        teacher = await db.users.find_one(
+            {"id": class_info["teacher_id"]}, {"_id": 0, "name": 1, "email": 1}
+        )
+        if teacher:
+            class_info["teacher_name"] = teacher.get("name", "")
+            class_info["teacher_email"] = teacher.get("email", "")
+    if not class_info.get("teacher_name"):
+        class_info["teacher_name"] = ""
     
     students = await db.students.find(
         {"class_id": class_id, "school_code": current_user["school_code"]}, 
