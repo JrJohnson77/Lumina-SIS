@@ -1,0 +1,51 @@
+{
+  "summary": "Frontend Phase-1 verification of the new FACTS/RenWeb-style Lumina Student Profile (/students/:studentId). Logged in as SUNF admin and SUNF teacher. The three-panel shell (roster-panel / profile-actionbar / profile-center / profile-tabs) renders correctly with the .lumina-profile scope. All Phase-1 data-backed tabs (Dashboard, Academics, Attendance, Family, Medical, Behavior) pull real data from /api endpoints; the 7 Coming-Soon tabs (Alerts, Interests, Login Management, Schedule, School, Transcript, User Defined) render the EmptyTab. Roster filters, search, sort order, count, active-row highlight, hash-driven tab switching, admin Delete button visibility, and teacher-scoped roster (25 students) all work as specified. Responsive collapse at <1024px confirmed (left/right panels hide, center stacks).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Navigate to /students", "issue": "Spec says /students should redirect to /students/<first-id>#dashboard. Currently /students is still routed in App.js (line 122) to the LEGACY StudentsPage list/grid view, NOT StudentProfilePage. The auto-redirect useEffect lives inside StudentProfilePage and only fires when studentId is missing on /students/:studentId — but that route never matches a bare /students URL. To honour the spec, either (a) point /students to StudentProfilePage (which will then auto-redirect via its existing useEffect), or (b) add a top-level redirect/Navigate at /students that picks the first roster id. Workaround today: clicking any student card on the StudentsPage list correctly opens the new three-panel profile.", "affected_selectors": ["a[href^='/students/']", "[data-testid='lumina-student-profile']"]},
+      {"flow": "Initial profile load hash", "issue": "When the user lands on /students/<id> directly (no hash), activeTab state correctly defaults to 'dashboard' and the dashboard renders, but window.location.hash stays empty until the user clicks a tab. Spec implies hash should be #dashboard on first paint. Minor — does not affect functionality, only deep-link semantics.", "affected_selectors": ["window.location.hash"]}
+    ],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "SUNF admin login -> /dashboard",
+    "Direct nav to /students/<id> renders [data-testid='lumina-student-profile'] with the four panels (roster-panel, profile-actionbar, profile-center, profile-tabs)",
+    "Filters present: filter-type (disabled, value=Student), filter-status (default Enrolled), filter-grade (default All Grades), filter-search",
+    "Roster shows 148 SUNF students in 'Last, First Middle' format, alphabetically sorted (Anderson, Bella Rose -> Wilson, Sofia James)",
+    "roster-count text = 'Count: 148'; live updates to 'Count: 0' when searching 'amir' and resets on clear",
+    "Clicking another roster-row updates URL to /students/<new-id>#dashboard and adds lp-roster__row--active class to the clicked row",
+    "Dashboard tab shows card-photo, card-contact, card-school-info, card-student-info, card-attendance-year (with SVG donut), card-family",
+    "Family card lists guardians with relationship badges (GRANDPARENT etc.)",
+    "Academics tab renders subject/class/score/grade table from /api/gradebook (10 rows for sample student, Term 1 / 2025-2026)",
+    "Attendance tab shows 5 summary tiles (Present 8 / Absent 1 / Tardy 1 / Excused 0 / % Present 85%) and 10-record history table",
+    "Medical tab fetches /api/health/{id} and renders Vaccinations / Allergies / Medical Conditions / Medications / Nurse Visits with proper empty-state copy ('None recorded.')",
+    "Behavior tab shows Major/Moderate/Minor counts (0/0/0) and 'No incidents' empty state",
+    "All 13 right-nav tabs switch center content WITHOUT a page reload; URL hash updates to #dashboard/#academics/#attendance/#family/#medical/#behavior/#alerts/#interests/#login/#schedule/#school/#transcript/#user-defined",
+    "Coming-Soon tabs (Alerts/Interests/Login Management/Schedule/School/Transcript/User Defined) render EmptyTab with 'This section is coming soon.' and a data-testid='empty-tab-<label>'",
+    "Admin sees [data-testid='profile-delete-btn'] in action bar; clicking fires window.confirm dialog (dismissed during test — no actual deletion)",
+    "Teacher (sarah.thompson.sunf) only sees 25 students in roster (matches GET /api/students which returned length 25); Delete button is HIDDEN for teacher role",
+    "Responsive at width=800px: roster-panel and profile-tabs collapse (display:none, bounding_box=null) and profile-center stacks full-width — matches spec"
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Wire /students to redirect/render the new StudentProfilePage so spec's auto-redirect to /students/<first-id>#dashboard takes effect. Recommended fix in /app/frontend/src/App.js: change the /students route element from <StudentsPage/> to <StudentProfilePage/> (or add a <Navigate>/loader that picks the first roster id) — the existing useEffect in StudentProfilePage already handles the empty-studentId case.",
+    "Optional polish: when StudentProfilePage mounts with no hash, replaceState to add '#dashboard' so deep-links / share-URLs preserve the active tab from the first paint."
+  ],
+  "critical_code_review_comments": [
+    "StudentProfilePage.js is 350 lines — well within the 700-line guideline. Componentization (tab files + EmptyTab) is clean and DRY.",
+    "DashboardTab.js fires axios.get('/users') for every dashboard load to resolve the homeroom teacher name. For teacher role this returns 403/empty (handled silently), but for admins viewing 148 students this is a wasted full-user-list fetch per profile switch. Consider caching in a parent useMemo or adding a dedicated /api/users/{id} lookup.",
+    "matchesGradeFilter parses grade_level via regex (/\\d+/) — works for 'Grade 1A', 'Grade 10B', but 'Pre-K' / 'Kindergarten' are matched via includes(). Add a unit test fixture to lock in behavior before Phase 2.",
+    "Donut chart renders inline; consider abstracting to a small reusable component if the same chart shows up in Attendance/Behavior tabs in Phase 2.",
+    "All interactive elements correctly expose data-testid attributes — excellent testability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only review)", "frontend": "~95% (17/17 functional checks pass; 1 routing gap on /students auto-redirect, 1 minor hash-on-first-paint nit)"},
+  "test_credentials": "SUNF admin (school=SUNF, user=admin, pw=Admin@123); SUNF teacher (school=SUNF, user=sarah.thompson.sunf, pw=Teacher@123). Both verified.",
+  "seed_data_creation": "None. No students were deleted — delete confirm dialog was dismissed during the admin run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All Phase-1 tab components live under /app/frontend/src/components/student-profile/*.js. The /students route in App.js still maps to the legacy StudentsPage. If main agent re-wires it to StudentProfilePage, retest that bare /students replaces URL with /students/<first-id>#dashboard for both admin (first id should be the first alpha-sorted student) and teacher (first id should be from teacher's assigned-class list). API endpoints exercised: GET /api/students, GET /api/classes, GET /api/students/{id}, GET /api/students/{id}/attendance/summary, GET /api/gradebook?student_id=, GET /api/discipline, GET /api/health/{id}, GET /api/users.",
+  "rca of the issue": "The /students -> /students/<first-id>#dashboard auto-redirect spec is not delivered today because the App.js Route for /students still points to the OLD StudentsPage component (a list/grid view). The new StudentProfilePage's auto-redirect useEffect only triggers when its component mounts with an undefined studentId param — which never happens because the /students path doesn't render StudentProfilePage at all. Fix is one-line in App.js (swap the element or add a small Navigate wrapper)."
+}

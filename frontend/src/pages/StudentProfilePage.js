@@ -1,340 +1,349 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
-import {
-    Loader2, ArrowLeft, GraduationCap, CalendarCheck, BookOpen,
-    Heart, AlertTriangle, FileText, AlertCircle,
-} from 'lucide-react';
 import { toast } from 'sonner';
+import {
+    Search,
+    Trash2,
+    ExternalLink,
+    Home,
+    Phone,
+    Smartphone,
+    Mail,
+    GraduationCap,
+    School,
+    Users,
+    Plus,
+    Loader2,
+    User,
+} from 'lucide-react';
+import '../styles/student-profile.css';
+
+import DashboardTab from '../components/student-profile/DashboardTab';
+import AcademicsTab from '../components/student-profile/AcademicsTab';
+import AttendanceTab from '../components/student-profile/AttendanceTab';
+import FamilyTab from '../components/student-profile/FamilyTab';
+import MedicalTab from '../components/student-profile/MedicalTab';
+import BehaviorTab from '../components/student-profile/BehaviorTab';
+import EmptyTab from '../components/student-profile/EmptyTab';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const initials = (first, last) => `${(first || '')[0] || ''}${(last || '')[0] || ''}`.toUpperCase() || '?';
+const STATUS_OPTIONS = ['Enrolled', 'Inactive', 'Withdrawn', 'Graduated'];
+const GRADE_OPTIONS = [
+    'All Grades', 'Pre-K', 'Kindergarten',
+    'Grade: 01', 'Grade: 02', 'Grade: 03', 'Grade: 04', 'Grade: 05',
+    'Grade: 06', 'Grade: 07', 'Grade: 08', 'Grade: 09',
+    'Grade: 10', 'Grade: 11', 'Grade: 12',
+];
 
-const monthLabel = (date) => {
-    const d = date instanceof Date ? date : new Date(date);
-    return d.toLocaleString('default', { month: 'long', year: 'numeric' });
+// Tabs in spec order. data-backed phase-1 tabs use real components.
+const TABS = [
+    { key: 'dashboard', label: 'Dashboard', component: DashboardTab },
+    { key: 'academics', label: 'Academics', component: AcademicsTab },
+    { key: 'alerts', label: 'Alerts', component: EmptyTab, comingSoon: true },
+    { key: 'attendance', label: 'Attendance', component: AttendanceTab },
+    { key: 'behavior', label: 'Behavior', component: BehaviorTab },
+    { key: 'family', label: 'Family', component: FamilyTab },
+    { key: 'interests', label: 'Interests', component: EmptyTab, comingSoon: true },
+    { key: 'login', label: 'Login Management', component: EmptyTab, comingSoon: true },
+    { key: 'medical', label: 'Medical', component: MedicalTab },
+    { key: 'schedule', label: 'Schedule', component: EmptyTab, comingSoon: true },
+    { key: 'school', label: 'School', component: EmptyTab, comingSoon: true },
+    { key: 'transcript', label: 'Transcript', component: EmptyTab, comingSoon: true },
+    { key: 'user-defined', label: 'User Defined', component: EmptyTab, comingSoon: true },
+];
+
+const matchesGradeFilter = (student, classMap, grade) => {
+    if (!grade || grade === 'All Grades') return true;
+    const cls = classMap.get(student.class_id);
+    const gl = (cls?.grade_level || '').toLowerCase();
+    const sel = grade.toLowerCase();
+    if (sel === 'pre-k') return gl.includes('pre') && gl.includes('k');
+    if (sel === 'kindergarten') return gl.startsWith('k') || gl.includes('kinder');
+    // sel is like "grade: 01" → extract number, compare to grade_level number
+    const num = (sel.match(/\d+/) || [null])[0];
+    if (!num) return true;
+    const glNum = (gl.match(/\d+/) || [null])[0];
+    return glNum === num || glNum === String(parseInt(num, 10));
 };
 
 export default function StudentProfilePage() {
     const { studentId } = useParams();
-    const { token, user } = useAuth();
-    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
+    const { isAdmin } = useAuth();
+
+    // roster state
+    const [roster, setRoster] = useState([]);
+    const [rosterLoading, setRosterLoading] = useState(true);
+    const [classMap, setClassMap] = useState(new Map());
+    const [status, setStatus] = useState('Enrolled');
+    const [grade, setGrade] = useState('All Grades');
+    const [search, setSearch] = useState('');
+
+    // active profile
     const [student, setStudent] = useState(null);
-    const [gradebook, setGradebook] = useState([]);
-    const [attendance, setAttendance] = useState([]);
-    const [attendanceSummary, setAttendanceSummary] = useState(null);
-    const [healthRecord, setHealthRecord] = useState(null);
-    const [discipline, setDiscipline] = useState([]);
+    const [studentLoading, setStudentLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState(() => {
+        const hash = window.location.hash.replace('#', '');
+        return TABS.find((t) => t.key === hash) ? hash : 'dashboard';
+    });
+
+    // ---- Initial load: roster + classes ----
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setRosterLoading(true);
+            try {
+                const [studentsRes, classesRes] = await Promise.all([
+                    axios.get(`${API}/students`),
+                    axios.get(`${API}/classes`),
+                ]);
+                if (cancelled) return;
+                setRoster(studentsRes.data || []);
+                const map = new Map();
+                (classesRes.data || []).forEach((c) => map.set(c.id, c));
+                setClassMap(map);
+            } catch (e) {
+                toast.error('Failed to load roster');
+            } finally {
+                if (!cancelled) setRosterLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    // ---- Load active student detail ----
+    const loadStudent = useCallback(async (id) => {
+        if (!id) return;
+        setStudentLoading(true);
+        try {
+            const res = await axios.get(`${API}/students/${id}`);
+            setStudent(res.data);
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Failed to load student');
+            setStudent(null);
+        } finally {
+            setStudentLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        if (!studentId) return;
-        loadAll();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [studentId]);
+        if (studentId) loadStudent(studentId);
+    }, [studentId, loadStudent]);
 
-    const loadAll = async () => {
-        setLoading(true);
-        try {
-            const auth = { headers: { Authorization: `Bearer ${token}` } };
-            const month = new Date().toISOString().slice(0, 7);
-            const [s, g, a, h, d, summary] = await Promise.allSettled([
-                axios.get(`${API}/students/${studentId}`, auth),
-                axios.get(`${API}/gradebook?student_id=${studentId}`, auth),
-                axios.get(`${API}/attendance?student_id=${studentId}`, auth),
-                axios.get(`${API}/health/${studentId}`, auth),
-                axios.get(`${API}/discipline`, auth),
-                axios.get(`${API}/students/${studentId}/attendance/summary?month=${month}`, auth),
-            ]);
-            if (s.status === 'fulfilled') setStudent(s.value.data);
-            else throw s.reason;
-            if (g.status === 'fulfilled') setGradebook(g.value.data);
-            if (a.status === 'fulfilled') setAttendance(a.value.data);
-            if (h.status === 'fulfilled') setHealthRecord(h.value.data);
-            if (d.status === 'fulfilled') {
-                setDiscipline((d.value.data || []).filter((i) => i.student_id === studentId));
+    // ---- Auto-select first student if none in URL ----
+    useEffect(() => {
+        if (!studentId && roster.length > 0 && !rosterLoading) {
+            navigate(`/students/${roster[0].id}${window.location.hash || '#dashboard'}`, { replace: true });
+        }
+    }, [studentId, roster, rosterLoading, navigate]);
+
+    // ---- Filter roster ----
+    const filteredRoster = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        return roster.filter((s) => {
+            // status filter
+            const st = (s.enrollment_status || 'enrolled').toLowerCase();
+            if (st !== status.toLowerCase()) return false;
+            // grade filter via class
+            if (!matchesGradeFilter(s, classMap, grade)) return false;
+            // search
+            if (term) {
+                const blob = `${s.last_name || ''} ${s.first_name || ''} ${s.middle_name || ''} ${s.student_id || ''}`.toLowerCase();
+                if (!blob.includes(term)) return false;
             }
-            if (summary.status === 'fulfilled') setAttendanceSummary(summary.value.data);
-        } catch (error) {
-            toast.error(error?.response?.data?.detail || 'Failed to load student profile');
-        } finally {
-            setLoading(false);
+            return true;
+        });
+    }, [roster, status, grade, search, classMap]);
+
+    // Switch tab updates URL hash
+    const onTabChange = useCallback((key) => {
+        setActiveTab(key);
+        const newUrl = `${window.location.pathname}#${key}`;
+        window.history.replaceState(null, '', newUrl);
+    }, []);
+
+    const selectStudent = useCallback((id) => {
+        if (id === studentId) return;
+        navigate(`/students/${id}#${activeTab}`);
+    }, [studentId, navigate, activeTab]);
+
+    const handleDelete = async () => {
+        if (!student || !isAdmin) return;
+        const name = `${student.first_name} ${student.last_name}`;
+        if (!window.confirm(`Delete ${name}? This cannot be undone.`)) return;
+        try {
+            await axios.delete(`${API}/students/${student.id}`);
+            toast.success(`${name} deleted`);
+            // refetch roster, jump to first remaining
+            const newRoster = roster.filter((s) => s.id !== student.id);
+            setRoster(newRoster);
+            if (newRoster.length > 0) navigate(`/students/${newRoster[0].id}#${activeTab}`);
+            else navigate('/students');
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Failed to delete student');
         }
     };
 
-    const guardians = useMemo(() => student?.family_members || [], [student]);
+    const fullName = student
+        ? `${student.first_name || ''} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name || ''}`.trim()
+        : '';
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[400px]" data-testid="student-profile-loading">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
-        );
-    }
-
-    if (!student) {
-        return (
-            <div className="text-center py-16">
-                <AlertCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-30" />
-                <h2 className="text-xl font-medium">Student not found</h2>
-                <Link to="/students" className="text-primary hover:underline mt-3 inline-block">Back to students</Link>
-            </div>
-        );
-    }
+    const activeTabConfig = TABS.find((t) => t.key === activeTab) || TABS[0];
+    const TabComponent = activeTabConfig.component;
 
     return (
-        <div className="space-y-6" data-testid="student-profile-page">
-            <Link to="/students" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground" data-testid="back-to-students">
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                Back to students
-            </Link>
-
-            {/* Header */}
-            <Card className="rounded-2xl">
-                <CardContent className="pt-6">
-                    <div className="flex flex-col md:flex-row md:items-center gap-6">
-                        <Avatar className="w-24 h-24 text-2xl">
-                            {student.photo_url ? <AvatarImage src={student.photo_url} alt={student.first_name} /> : null}
-                            <AvatarFallback className="bg-violet-100 text-violet-700 font-bold text-xl">
-                                {initials(student.first_name, student.last_name)}
-                            </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                            <h1 className="text-2xl font-bold">
-                                {student.first_name} {student.middle_name} {student.last_name}
-                            </h1>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                {student.student_id ? <Badge variant="outline">ID: {student.student_id}</Badge> : null}
-                                {student.gender ? <Badge variant="outline">{student.gender}</Badge> : null}
-                                {student.age ? <Badge variant="outline">Age {student.age}</Badge> : null}
-                                {student.house ? <Badge variant="outline">{student.house}</Badge> : null}
-                                {student.enrollment_status ? (
-                                    <Badge className="bg-emerald-100 text-emerald-800 capitalize">{student.enrollment_status}</Badge>
-                                ) : null}
-                                {attendanceSummary?.below_threshold ? (
-                                    <Badge className="bg-rose-100 text-rose-800" data-testid="attendance-warning-badge">
-                                        Attendance {attendanceSummary.percent_present}%
-                                    </Badge>
-                                ) : null}
+        <div className="lumina-profile" data-testid="lumina-student-profile">
+            <div className="lp-shell">
+                {/* ===== LEFT PANEL — Roster ===== */}
+                <aside className="lp-left" data-testid="roster-panel">
+                    <div className="lp-left__filters">
+                        <div className="lp-field">
+                            <label className="lp-field__label">Type</label>
+                            <select className="lp-select" value="Student" disabled data-testid="filter-type">
+                                <option>Student</option>
+                                <option>Staff</option>
+                            </select>
+                        </div>
+                        <div className="lp-field">
+                            <label className="lp-field__label">Status</label>
+                            <select
+                                className="lp-select"
+                                value={status}
+                                onChange={(e) => setStatus(e.target.value)}
+                                data-testid="filter-status"
+                            >
+                                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        <div className="lp-field">
+                            <label className="lp-field__label">Substatus</label>
+                            <select
+                                className="lp-select"
+                                value={grade}
+                                onChange={(e) => setGrade(e.target.value)}
+                                data-testid="filter-grade"
+                            >
+                                {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
+                            </select>
+                        </div>
+                        <div className="lp-field">
+                            <label className="lp-field__label">Search</label>
+                            <div className="lp-search">
+                                <input
+                                    className="lp-input"
+                                    placeholder="Search"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    data-testid="filter-search"
+                                    style={{ paddingRight: 34 }}
+                                />
+                                <button type="button" className="lp-search__icon" aria-label="Search">
+                                    <Search size={14} />
+                                </button>
                             </div>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
 
-            {/* Tabs */}
-            <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid grid-cols-3 md:grid-cols-6 w-full md:w-auto">
-                    <TabsTrigger value="overview" data-testid="tab-overview"><GraduationCap className="w-4 h-4 mr-1.5" />Overview</TabsTrigger>
-                    <TabsTrigger value="grades" data-testid="tab-grades"><BookOpen className="w-4 h-4 mr-1.5" />Grades</TabsTrigger>
-                    <TabsTrigger value="attendance" data-testid="tab-attendance"><CalendarCheck className="w-4 h-4 mr-1.5" />Attendance</TabsTrigger>
-                    <TabsTrigger value="health" data-testid="tab-health"><Heart className="w-4 h-4 mr-1.5" />Health</TabsTrigger>
-                    <TabsTrigger value="discipline" data-testid="tab-discipline"><AlertTriangle className="w-4 h-4 mr-1.5" />Discipline</TabsTrigger>
-                    <TabsTrigger value="documents" data-testid="tab-documents"><FileText className="w-4 h-4 mr-1.5" />Documents</TabsTrigger>
-                </TabsList>
-
-                {/* OVERVIEW */}
-                <TabsContent value="overview">
-                    <Card className="rounded-2xl">
-                        <CardContent className="pt-6 grid md:grid-cols-2 gap-6">
-                            <div>
-                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Personal</h3>
-                                <dl className="space-y-2 text-sm">
-                                    <div className="flex justify-between"><dt className="text-muted-foreground">Date of birth</dt><dd>{student.date_of_birth || '—'}</dd></div>
-                                    <div className="flex justify-between"><dt className="text-muted-foreground">Phone</dt><dd>{student.student_phone || '—'}</dd></div>
-                                    <div className="flex justify-between"><dt className="text-muted-foreground">Email</dt><dd>{student.student_email || '—'}</dd></div>
-                                    <div className="flex justify-between"><dt className="text-muted-foreground">Address</dt><dd className="text-right">{student.address_line1 || '—'}</dd></div>
-                                    <div className="flex justify-between"><dt className="text-muted-foreground">Emergency</dt><dd>{student.emergency_contact || '—'}</dd></div>
-                                </dl>
+                    <div className="lp-roster" data-testid="roster-list">
+                        {rosterLoading ? (
+                            <div className="lp-roster__empty">
+                                <Loader2 className="animate-spin inline-block mr-2" size={14} />
+                                Loading…
                             </div>
-                            <div>
-                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Guardians</h3>
-                                {guardians.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">No guardians recorded.</p>
-                                ) : (
-                                    <ul className="space-y-2 text-sm">
-                                        {guardians.map((g, idx) => (
-                                            <li key={g.id || idx} className="p-3 rounded-lg bg-muted/30 border">
-                                                <p className="font-medium">{g.first_name} {g.last_name} <span className="text-xs text-muted-foreground">({g.relationship})</span></p>
-                                                {g.email ? <p className="text-xs text-muted-foreground">{g.email}</p> : null}
-                                                {g.cell_phone ? <p className="text-xs text-muted-foreground">{g.cell_phone}</p> : null}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                        ) : filteredRoster.length === 0 ? (
+                            <div className="lp-roster__empty">No students match the current filters.</div>
+                        ) : (
+                            filteredRoster.map((s) => {
+                                const display = `${s.last_name || ''}, ${s.first_name || ''}${s.middle_name ? ' ' + s.middle_name : ''}`;
+                                const isActive = s.id === studentId;
+                                return (
+                                    <div
+                                        key={s.id}
+                                        className={`lp-roster__row ${isActive ? 'lp-roster__row--active' : ''}`}
+                                        onClick={() => selectStudent(s.id)}
+                                        data-testid={`roster-row-${s.id}`}
+                                    >
+                                        {display}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
 
-                {/* GRADES */}
-                <TabsContent value="grades">
-                    <Card className="rounded-2xl">
-                        <CardHeader><CardTitle>Recent gradebook entries</CardTitle></CardHeader>
-                        <CardContent>
-                            {gradebook.length === 0 ? (
-                                <p className="text-sm text-muted-foreground py-6 text-center">No grades recorded yet.</p>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-muted/50">
-                                            <tr>
-                                                <th className="text-left p-2 font-medium">Term</th>
-                                                <th className="text-left p-2 font-medium">Year</th>
-                                                <th className="text-left p-2 font-medium">Overall</th>
-                                                <th className="text-left p-2 font-medium">Grade</th>
-                                                <th className="text-left p-2 font-medium">Locked</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {gradebook.map((g) => (
-                                                <tr key={g.id} className="border-b last:border-0">
-                                                    <td className="p-2">{g.term}</td>
-                                                    <td className="p-2">{g.academic_year}</td>
-                                                    <td className="p-2">{g.overall_score}</td>
-                                                    <td className="p-2"><Badge>{g.overall_grade}</Badge></td>
-                                                    <td className="p-2">{g.is_locked ? <Badge className="bg-amber-100 text-amber-800">Locked</Badge> : '—'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                    <div className="lp-left__footer">
+                        <span className="lp-left__count" data-testid="roster-count">
+                            Count: {filteredRoster.length}
+                        </span>
+                        <Link to="/students" className="lp-link" data-testid="roster-add-link">
+                            Add
+                        </Link>
+                    </div>
+                </aside>
 
-                {/* ATTENDANCE */}
-                <TabsContent value="attendance">
-                    <Card className="rounded-2xl">
-                        <CardHeader>
-                            <CardTitle>{monthLabel(new Date())} — Monthly summary</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {attendanceSummary ? (
-                                <div className="grid md:grid-cols-5 gap-3 mb-4">
-                                    <StatBlock label="Present" value={attendanceSummary.present} color="emerald" />
-                                    <StatBlock label="Absent" value={attendanceSummary.absent} color="rose" />
-                                    <StatBlock label="Late" value={attendanceSummary.late} color="amber" />
-                                    <StatBlock label="Excused" value={attendanceSummary.excused} color="sky" />
-                                    <StatBlock label="% Present" value={`${attendanceSummary.percent_present}%`} color={attendanceSummary.below_threshold ? 'rose' : 'emerald'} />
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">No attendance summary available.</p>
-                            )}
-                            {attendance.length === 0 ? (
-                                <p className="text-sm text-muted-foreground py-6 text-center">No attendance records.</p>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-muted/50"><tr><th className="text-left p-2">Date</th><th className="text-left p-2">Status</th></tr></thead>
-                                        <tbody>
-                                            {attendance.slice(0, 30).map((a) => (
-                                                <tr key={a.id} className="border-b last:border-0">
-                                                    <td className="p-2">{a.date}</td>
-                                                    <td className="p-2 capitalize">{a.status}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                {/* ===== ACTION BAR ===== */}
+                <header className="lp-actionbar" data-testid="profile-actionbar">
+                    <div className="lp-actionbar__name" data-testid="profile-actionbar-name">
+                        {fullName || (studentLoading ? 'Loading…' : 'No student selected')}
+                    </div>
+                    <div className="lp-actionbar__actions">
+                        {isAdmin && student && (
+                            <button
+                                type="button"
+                                className="lp-iconbtn lp-iconbtn--danger"
+                                onClick={handleDelete}
+                                data-testid="profile-delete-btn"
+                            >
+                                <Trash2 size={16} />
+                                <span>Delete</span>
+                            </button>
+                        )}
+                    </div>
+                </header>
 
-                {/* HEALTH */}
-                <TabsContent value="health">
-                    <Card className="rounded-2xl">
-                        <CardHeader><CardTitle>Health record</CardTitle></CardHeader>
-                        <CardContent className="space-y-4">
-                            {healthRecord ? (
-                                <>
-                                    <Section title="Vaccinations" items={healthRecord.vaccinations} renderItem={(v) => `${v.name} — ${v.date}`} />
-                                    <Section title="Allergies" items={healthRecord.allergies} renderItem={(a) => `${a.allergen} (${a.severity}): ${a.reaction}`} />
-                                    <Section title="Conditions" items={healthRecord.conditions} renderItem={(c) => `${c.name} (${c.diagnosis_date || 'no date'})`} />
-                                    <Section title="Medications" items={healthRecord.medications} renderItem={(m) => `${m.name} ${m.dosage || ''} ${m.frequency || ''}`} />
-                                    <Section title="Visits" items={healthRecord.visits} renderItem={(v) => `${v.date}: ${v.reason}`} />
-                                </>
-                            ) : (
-                                <p className="text-sm text-muted-foreground py-6 text-center">No health record.</p>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                {/* ===== CENTER PANEL ===== */}
+                <main className="lp-center" data-testid="profile-center">
+                    {studentLoading ? (
+                        <div className="lp-empty">
+                            <Loader2 className="animate-spin" style={{ display: 'inline-block', marginRight: 8 }} />
+                            Loading profile…
+                        </div>
+                    ) : !student ? (
+                        <div className="lp-empty">
+                            <h4>No student selected</h4>
+                            <p>Pick a student from the left to view their profile.</p>
+                        </div>
+                    ) : (
+                        <TabComponent
+                            student={student}
+                            classMap={classMap}
+                            onReload={() => loadStudent(student.id)}
+                            comingSoon={activeTabConfig.comingSoon}
+                            tabLabel={activeTabConfig.label}
+                        />
+                    )}
+                </main>
 
-                {/* DISCIPLINE */}
-                <TabsContent value="discipline">
-                    <Card className="rounded-2xl">
-                        <CardHeader><CardTitle>Discipline history</CardTitle></CardHeader>
-                        <CardContent>
-                            {discipline.length === 0 ? (
-                                <p className="text-sm text-muted-foreground py-6 text-center">No incidents recorded.</p>
-                            ) : (
-                                <ul className="space-y-3">
-                                    {discipline.map((d) => (
-                                        <li key={d.id} className="p-4 rounded-xl border bg-muted/30">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <Badge className={d.type === 'Major' ? 'bg-rose-100 text-rose-800' : d.type === 'Moderate' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}>{d.type}</Badge>
-                                                <span className="text-xs text-muted-foreground">{new Date(d.date).toLocaleDateString()}</span>
-                                            </div>
-                                            <p className="text-sm font-medium">{d.description}</p>
-                                            {d.action_taken ? <p className="text-xs text-muted-foreground mt-1">Action: {d.action_taken}</p> : null}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* DOCUMENTS */}
-                <TabsContent value="documents">
-                    <Card className="rounded-2xl">
-                        <CardHeader><CardTitle>Documents</CardTitle></CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-muted-foreground py-8 text-center">
-                                Document storage coming soon. Use Import/Export or report-card generation in the meantime.
-                            </p>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
+                {/* ===== RIGHT PANEL — Tabs ===== */}
+                <nav className="lp-right" data-testid="profile-tabs">
+                    {TABS.map((t) => (
+                        <button
+                            key={t.key}
+                            type="button"
+                            className={`lp-right__tab ${activeTab === t.key ? 'lp-right__tab--active' : ''}`}
+                            onClick={() => onTabChange(t.key)}
+                            data-testid={`profile-tab-${t.key}`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </nav>
+            </div>
         </div>
     );
 }
 
-const StatBlock = ({ label, value, color }) => {
-    const map = {
-        emerald: 'bg-emerald-100 text-emerald-800',
-        rose: 'bg-rose-100 text-rose-800',
-        amber: 'bg-amber-100 text-amber-800',
-        sky: 'bg-sky-100 text-sky-800',
-        violet: 'bg-violet-100 text-violet-800',
-    };
-    return (
-        <div className={`rounded-xl p-3 ${map[color] || 'bg-muted'}`}>
-            <p className="text-xs uppercase tracking-wider opacity-70">{label}</p>
-            <p className="text-xl font-bold">{value}</p>
-        </div>
-    );
-};
-
-const Section = ({ title, items, renderItem }) => (
-    <div>
-        <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">{title}</h4>
-        {items && items.length > 0 ? (
-            <ul className="space-y-1 text-sm">
-                {items.map((it, i) => <li key={it.id || i} className="text-foreground">• {renderItem(it)}</li>)}
-            </ul>
-        ) : (
-            <p className="text-xs text-muted-foreground">None recorded.</p>
-        )}
-    </div>
-);
+// Re-export small helpers for tab components
+export { GraduationCap, School, Users, Plus, ExternalLink, Home, Phone, Smartphone, Mail, User };
