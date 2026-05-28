@@ -122,6 +122,14 @@ function AppRoutes() {
                 path="/students" 
                 element={
                     <ProtectedRoute>
+                        <StudentProfilePage />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/students/manage" 
+                element={
+                    <ProtectedRoute>
                         <StudentsPage />
                     </ProtectedRoute>
                 } 

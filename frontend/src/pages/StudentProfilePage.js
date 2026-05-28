@@ -90,6 +90,14 @@ export default function StudentProfilePage() {
         return TABS.find((t) => t.key === hash) ? hash : 'dashboard';
     });
 
+    // Ensure URL hash reflects the active tab on first paint
+    useEffect(() => {
+        if (!window.location.hash) {
+            window.history.replaceState(null, '', `${window.location.pathname}#${activeTab}`);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // ---- Initial load: roster + classes ----
     useEffect(() => {
         let cancelled = false;
@@ -277,7 +285,7 @@ export default function StudentProfilePage() {
                         <span className="lp-left__count" data-testid="roster-count">
                             Count: {filteredRoster.length}
                         </span>
-                        <Link to="/students" className="lp-link" data-testid="roster-add-link">
+                        <Link to="/students/manage" className="lp-link" data-testid="roster-add-link">
                             Add
                         </Link>
                     </div>
