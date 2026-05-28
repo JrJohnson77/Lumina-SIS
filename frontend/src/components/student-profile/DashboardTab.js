@@ -131,8 +131,6 @@ export default function DashboardTab({ student, classMap }) {
 
     return (
         <>
-            <h1 className="lp-center__title" data-testid="dashboard-student-name">{fullName}</h1>
-
             <div className="lp-dashboard">
                 {/* === Photo card === */}
                 <div className="lp-card lp-card--photo" data-testid="card-photo">

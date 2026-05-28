@@ -1,0 +1,56 @@
+{
+  "summary": "Frontend-only verification of the rebuilt Flexbox-based Lumina Student Profile (/students/:studentId). All 3 user-reported structural bugs from iteration 15 are FIXED: (1) student H1 + photo card now live INSIDE the center main column (verified hasH1=true in [data-testid='profile-center'], hasH1=false in [data-testid='roster-panel']); (2) the 11 .rnav-tab buttons live INSIDE the right <nav> panel (verified tabBtnCount=0 inside profile-center, count=11 inside profile-tabs); (3) the layout is a clean column-flex wrapper (topbar 44px + lumina-profile-body with 3 horizontal children: aside.lumina-profile-left, main.lumina-profile-center, nav.lumina-profile-right — exact DOM order confirmed). Verified for both SUNF admin (148 students, Delete button visible) and SUNF teacher (25 students scoped to assigned classes, Delete button hidden). Filters, search, roster row click w/ dashboard reset, tab-hash navigation, coming-soon tabs, dashboard cards w/ donut SVG, mailto fallback toast, Alerts action button, responsive column stacking at <1024px all PASS. /students auto-redirect to /students/<first-id>#dashboard now works (App.js wired to StudentProfilePage as recommended).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Reports action button", "issue": "Spec says 'Reports navigates to /reports'. handleReports calls navigate('/reports'), and App.js correctly defines /reports as <Navigate to=\"/report-cards\" replace />, so the final URL becomes /report-cards (the canonical Report Cards page). Functionally correct — the user lands on the reports module — but the URL surface differs from the literal spec wording. No fix needed unless spec wants a dedicated /reports route.", "affected_selectors": ["[data-testid=\"profile-reports-btn\"]"]}
+    ],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "SUNF admin login -> /dashboard, then /students auto-redirects to /students/<first-id>#dashboard",
+    "Outer wrapper: div.lumina-profile-page[data-testid='lumina-student-profile'] is present",
+    "Wrapper has exactly 2 direct children: .lumina-profile-topbar then .lumina-profile-body (topbar height = 44px)",
+    ".lumina-profile-body has exactly 3 direct children in order: aside.lumina-profile-left[data-testid='roster-panel'], main.lumina-profile-center[data-testid='profile-center'], nav.lumina-profile-right[data-testid='profile-tabs']",
+    "CRITICAL FIX VERIFIED: left panel contains NO h1 and NO [data-testid='card-photo'] (was previously polluted)",
+    "CRITICAL FIX VERIFIED: center panel contains [data-testid='profile-student-name'] H1 AND tab content; ZERO .rnav-tab buttons live inside profile-center",
+    "CRITICAL FIX VERIFIED: right panel contains EXACTLY 11 .rnav-tab buttons with labels in correct order: Dashboard, Academics, Alerts, Attendance, Behavior, Family, Interests, Login Management, Medical, Schedule, School (matches updated spec — Transcript & User Defined removed)",
+    "Active tab has 'rnav-tab active' class; default active = Dashboard on first paint",
+    "Top action bar: profile-actionbar-name = 'Bella Rose Anderson'; all 4 action testids present (delete/alerts/email/reports) for admin",
+    "Filters: filter-type disabled with value='Student', filter-status default 'Enrolled', filter-grade default 'All Grades', filter-nextyear checkbox present, Adv. Filter link present, filter-search input present",
+    "Roster: 148 rows for admin, alphabetically sorted 'Last, First Middle' (Anderson, Bella Rose first)",
+    "Clicking roster row updates URL to /students/<id>#dashboard (ALWAYS resets to dashboard tab on selection — spec compliant); adds 'lp-roster__row--active' class",
+    "Search 'amir' -> Count: 0, clear search -> Count: 148 (live updates)",
+    "Tab click switches center without page reload; URL hash updates (#academics confirmed); H1 student name remains visible across tab switches",
+    "Dashboard tab renders all 6 cards: card-photo, card-contact, card-school-info, card-student-info, card-attendance-year (SVG donut present), card-family",
+    "Coming-Soon tabs (Interests verified) render 'This section is coming soon.' EmptyTab content",
+    "Admin Delete button -> window.confirm dialog appears; dismissed in test (no deletion performed)",
+    "Alerts action button switches active tab to alerts (URL hash -> #alerts)",
+    "Email Instructors button -> sonner toast 'No instructor email on file for this class.' (mailto fallback path verified)",
+    "Reports action button -> navigate('/reports') which redirects to /report-cards (functional, see integration note)",
+    "Teacher login (sarah.thompson.sunf): roster scoped to 25 students; profile-delete-btn HIDDEN; structural separation still correct (left.hasH1=false, center.hasH1=true, tabs in right panel only)",
+    "Responsive <1024px: .lumina-profile-body computed flex-direction = 'column' — panels stack vertically as specified"
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL: If spec literally requires /reports URL surface (not redirect to /report-cards), update handleReports in StudentProfilePage.js to navigate('/report-cards') directly, OR keep /reports as the canonical reports route and remove the Navigate redirect. Current behavior is functional but URL ends at /report-cards."
+  ],
+  "critical_code_review_comments": [
+    "StudentProfilePage.js (420 lines) is well-structured and within the 700-line guideline. Flexbox layout is clean and uses semantic <aside>/<main>/<nav> elements — good a11y.",
+    "All interactive elements expose data-testid attributes — excellent testability.",
+    "selectStudent() correctly resets activeTab to 'dashboard' on every row click and forces the URL hash, matching spec.",
+    "The /students -> /students/<first-id>#dashboard auto-redirect is implemented via useEffect inside StudentProfilePage (relies on App.js mapping /students to StudentProfilePage, which is now wired correctly).",
+    "TABS array order in component (Dashboard, Academics, Alerts, Attendance, Behavior, Family, Interests, Login Management, Medical, Schedule, School) matches spec exactly.",
+    "DashboardTab still does axios.get('/users') per profile switch (carried over from iteration 15). Not a regression; consider caching via parent useMemo for Phase 2.",
+    "matchesGradeFilter regex/includes hybrid is unchanged from iteration 15 — still works but a unit test fixture would be useful."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "~99% (22/22 functional checks pass; 1 minor URL-surface note on Reports redirect)"},
+  "test_credentials": "SUNF admin (school=SUNF, user=admin, pw=Admin@123); SUNF teacher (school=SUNF, user=sarah.thompson.sunf, pw=Teacher@123). Both verified.",
+  "seed_data_creation": "None. Delete confirm dialog was dismissed; no students were removed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Structural rebuild from CSS Grid -> Flexbox is fully verified. The DOM separation users complained about (name+photo in left, tabs in center) is fixed and locked in by [data-testid='profile-student-name'] living only inside [data-testid='profile-center'], and .rnav-tab buttons living only inside [data-testid='profile-tabs']. /students route in App.js now correctly points to StudentProfilePage. TABS count is 11 (Transcript and User Defined dropped). Per-tab H1 has been removed from DashboardTab/AcademicsTab/AttendanceTab/FamilyTab/MedicalTab/BehaviorTab — page-level H1 in StudentProfilePage is the single source of truth.",
+  "rca of the issue": "Iteration 15 used CSS Grid with auto-placement and named grid-template-areas; when children mounted with conditional rendering (loading states, late-arriving student data), browsers reflowed items into unintended cells producing the user's 3 complaints. Main agent's Flexbox rewrite (column outer wrapper + horizontal flex body with explicit width on left/right asides) is deterministic — children render in DOM source order with no auto-placement. Verified DOM order matches spec exactly. Issue resolved."
+}

@@ -37,10 +37,9 @@ export default function AcademicsTab({ student, classMap }) {
 
     return (
         <>
-            <h1 className="lp-center__title"><BookOpen size={22} style={{ verticalAlign: 'middle', marginRight: 8, color: '#1565C0' }} />Academics</h1>
             <div className="lp-card">
                 <div className="lp-card__header">
-                    <h3 className="lp-card__title">Current Term Grades</h3>
+                    <h3 className="lp-card__title"><BookOpen />Academics — Current Term Grades</h3>
                     <span style={{ fontSize: 11.5, color: '#9E9E9E' }}>
                         {latestSubjects[0] ? `${latestSubjects[0].term} · ${latestSubjects[0].year}` : ''}
                     </span>

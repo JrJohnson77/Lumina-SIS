@@ -7,14 +7,9 @@ export default function FamilyTab({ student }) {
 
     return (
         <>
-            <h1 className="lp-center__title">
-                <Users size={22} style={{ verticalAlign: 'middle', marginRight: 8, color: '#1565C0' }} />
-                Family
-            </h1>
-
             <div className="lp-card">
                 <div className="lp-card__header">
-                    <h3 className="lp-card__title">Family Members</h3>
+                    <h3 className="lp-card__title"><Users />Family Members</h3>
                     <Link to="/students" className="lp-btn lp-btn--outline lp-btn--sm">
                         <Plus size={12} /> Add Family
                     </Link>

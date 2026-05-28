@@ -36,11 +36,6 @@ export default function AttendanceTab({ student }) {
 
     return (
         <>
-            <h1 className="lp-center__title">
-                <CalendarCheck size={22} style={{ verticalAlign: 'middle', marginRight: 8, color: '#1565C0' }} />
-                Attendance
-            </h1>
-
             {/* Summary tiles */}
             <div className="lp-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
                 <div className="lp-card" data-testid="att-present">

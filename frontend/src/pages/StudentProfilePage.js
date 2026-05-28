@@ -6,17 +6,10 @@ import { toast } from 'sonner';
 import {
     Search,
     Trash2,
-    ExternalLink,
-    Home,
-    Phone,
-    Smartphone,
+    Bell,
     Mail,
-    GraduationCap,
-    School,
-    Users,
-    Plus,
+    BarChart3,
     Loader2,
-    User,
 } from 'lucide-react';
 import '../styles/student-profile.css';
 
@@ -38,21 +31,18 @@ const GRADE_OPTIONS = [
     'Grade: 10', 'Grade: 11', 'Grade: 12',
 ];
 
-// Tabs in spec order. data-backed phase-1 tabs use real components.
 const TABS = [
-    { key: 'dashboard', label: 'Dashboard', component: DashboardTab },
-    { key: 'academics', label: 'Academics', component: AcademicsTab },
-    { key: 'alerts', label: 'Alerts', component: EmptyTab, comingSoon: true },
-    { key: 'attendance', label: 'Attendance', component: AttendanceTab },
-    { key: 'behavior', label: 'Behavior', component: BehaviorTab },
-    { key: 'family', label: 'Family', component: FamilyTab },
-    { key: 'interests', label: 'Interests', component: EmptyTab, comingSoon: true },
-    { key: 'login', label: 'Login Management', component: EmptyTab, comingSoon: true },
-    { key: 'medical', label: 'Medical', component: MedicalTab },
-    { key: 'schedule', label: 'Schedule', component: EmptyTab, comingSoon: true },
-    { key: 'school', label: 'School', component: EmptyTab, comingSoon: true },
-    { key: 'transcript', label: 'Transcript', component: EmptyTab, comingSoon: true },
-    { key: 'user-defined', label: 'User Defined', component: EmptyTab, comingSoon: true },
+    { key: 'dashboard',  label: 'Dashboard' },
+    { key: 'academics',  label: 'Academics' },
+    { key: 'alerts',     label: 'Alerts' },
+    { key: 'attendance', label: 'Attendance' },
+    { key: 'behavior',   label: 'Behavior' },
+    { key: 'family',     label: 'Family' },
+    { key: 'interests',  label: 'Interests' },
+    { key: 'login',      label: 'Login Management' },
+    { key: 'medical',    label: 'Medical' },
+    { key: 'schedule',   label: 'Schedule' },
+    { key: 'school',     label: 'School' },
 ];
 
 const matchesGradeFilter = (student, classMap, grade) => {
@@ -62,12 +52,27 @@ const matchesGradeFilter = (student, classMap, grade) => {
     const sel = grade.toLowerCase();
     if (sel === 'pre-k') return gl.includes('pre') && gl.includes('k');
     if (sel === 'kindergarten') return gl.startsWith('k') || gl.includes('kinder');
-    // sel is like "grade: 01" → extract number, compare to grade_level number
     const num = (sel.match(/\d+/) || [null])[0];
     if (!num) return true;
     const glNum = (gl.match(/\d+/) || [null])[0];
     return glNum === num || glNum === String(parseInt(num, 10));
 };
+
+// Small topbar action button — icon on top, label below
+function TopBarAction({ icon: Icon, label, onClick, danger = false, disabled = false, testid }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            data-testid={testid}
+            className={`topbar-action ${danger ? 'topbar-action--danger' : ''}`}
+        >
+            <Icon />
+            <span>{label}</span>
+        </button>
+    );
+}
 
 export default function StudentProfilePage() {
     const { studentId } = useParams();
@@ -78,8 +83,10 @@ export default function StudentProfilePage() {
     const [roster, setRoster] = useState([]);
     const [rosterLoading, setRosterLoading] = useState(true);
     const [classMap, setClassMap] = useState(new Map());
-    const [status, setStatus] = useState('Enrolled');
-    const [grade, setGrade] = useState('All Grades');
+    const [typeFilter] = useState('Student'); // disabled in phase 1
+    const [statusFilter, setStatusFilter] = useState('Enrolled');
+    const [substatusFilter, setSubstatusFilter] = useState('All Grades');
+    const [nextYearFilter, setNextYearFilter] = useState(false);
     const [search, setSearch] = useState('');
 
     // active profile
@@ -90,7 +97,7 @@ export default function StudentProfilePage() {
         return TABS.find((t) => t.key === hash) ? hash : 'dashboard';
     });
 
-    // Ensure URL hash reflects the active tab on first paint
+    // Persist hash on first paint
     useEffect(() => {
         if (!window.location.hash) {
             window.history.replaceState(null, '', `${window.location.pathname}#${activeTab}`);
@@ -98,7 +105,7 @@ export default function StudentProfilePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ---- Initial load: roster + classes ----
+    // Initial load: roster + classes
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -122,7 +129,7 @@ export default function StudentProfilePage() {
         return () => { cancelled = true; };
     }, []);
 
-    // ---- Load active student detail ----
+    // Load active student detail
     const loadStudent = useCallback(async (id) => {
         if (!id) return;
         setStudentLoading(true);
@@ -141,42 +148,39 @@ export default function StudentProfilePage() {
         if (studentId) loadStudent(studentId);
     }, [studentId, loadStudent]);
 
-    // ---- Auto-select first student if none in URL ----
+    // Auto-select first roster student if URL has no id
     useEffect(() => {
         if (!studentId && roster.length > 0 && !rosterLoading) {
-            navigate(`/students/${roster[0].id}${window.location.hash || '#dashboard'}`, { replace: true });
+            navigate(`/students/${roster[0].id}#${activeTab}`, { replace: true });
         }
-    }, [studentId, roster, rosterLoading, navigate]);
+    }, [studentId, roster, rosterLoading, navigate, activeTab]);
 
-    // ---- Filter roster ----
+    // Filter roster
     const filteredRoster = useMemo(() => {
         const term = search.trim().toLowerCase();
         return roster.filter((s) => {
-            // status filter
             const st = (s.enrollment_status || 'enrolled').toLowerCase();
-            if (st !== status.toLowerCase()) return false;
-            // grade filter via class
-            if (!matchesGradeFilter(s, classMap, grade)) return false;
-            // search
+            if (st !== statusFilter.toLowerCase()) return false;
+            if (!matchesGradeFilter(s, classMap, substatusFilter)) return false;
             if (term) {
                 const blob = `${s.last_name || ''} ${s.first_name || ''} ${s.middle_name || ''} ${s.student_id || ''}`.toLowerCase();
                 if (!blob.includes(term)) return false;
             }
             return true;
         });
-    }, [roster, status, grade, search, classMap]);
+    }, [roster, statusFilter, substatusFilter, search, classMap]);
 
-    // Switch tab updates URL hash
     const onTabChange = useCallback((key) => {
         setActiveTab(key);
-        const newUrl = `${window.location.pathname}#${key}`;
-        window.history.replaceState(null, '', newUrl);
+        window.history.replaceState(null, '', `${window.location.pathname}#${key}`);
     }, []);
 
     const selectStudent = useCallback((id) => {
         if (id === studentId) return;
-        navigate(`/students/${id}#${activeTab}`);
-    }, [studentId, navigate, activeTab]);
+        // Always reset to Dashboard tab on new selection (per spec)
+        setActiveTab('dashboard');
+        navigate(`/students/${id}#dashboard`);
+    }, [studentId, navigate]);
 
     const handleDelete = async () => {
         if (!student || !isAdmin) return;
@@ -185,13 +189,28 @@ export default function StudentProfilePage() {
         try {
             await axios.delete(`${API}/students/${student.id}`);
             toast.success(`${name} deleted`);
-            // refetch roster, jump to first remaining
             const newRoster = roster.filter((s) => s.id !== student.id);
             setRoster(newRoster);
-            if (newRoster.length > 0) navigate(`/students/${newRoster[0].id}#${activeTab}`);
-            else navigate('/students');
+            if (newRoster.length > 0) {
+                setActiveTab('dashboard');
+                navigate(`/students/${newRoster[0].id}#dashboard`);
+            } else {
+                navigate('/students/manage');
+            }
         } catch (e) {
             toast.error(e?.response?.data?.detail || 'Failed to delete student');
+        }
+    };
+
+    const handleAlerts = () => onTabChange('alerts');
+    const handleReports = () => navigate('/reports');
+    const handleEmailInstructors = () => {
+        // Best-effort: open mailto with the homeroom teacher's email if class is mapped
+        const cls = student ? classMap.get(student.class_id) : null;
+        if (cls?.teacher_email) {
+            window.location.href = `mailto:${cls.teacher_email}?subject=Re: ${student.first_name} ${student.last_name}`;
+        } else {
+            toast.info('No instructor email on file for this class.');
         }
     };
 
@@ -199,18 +218,77 @@ export default function StudentProfilePage() {
         ? `${student.first_name || ''} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name || ''}`.trim()
         : '';
 
-    const activeTabConfig = TABS.find((t) => t.key === activeTab) || TABS[0];
-    const TabComponent = activeTabConfig.component;
+    const renderActiveTab = () => {
+        if (!student) return null;
+        const props = { student, classMap, onReload: () => loadStudent(student.id) };
+        switch (activeTab) {
+            case 'dashboard':  return <DashboardTab {...props} />;
+            case 'academics':  return <AcademicsTab {...props} />;
+            case 'attendance': return <AttendanceTab {...props} />;
+            case 'family':     return <FamilyTab {...props} />;
+            case 'behavior':   return <BehaviorTab {...props} />;
+            case 'medical':    return <MedicalTab {...props} />;
+            case 'alerts':     return <EmptyTab tabLabel="Alerts" comingSoon />;
+            case 'interests':  return <EmptyTab tabLabel="Interests" comingSoon />;
+            case 'login':      return <EmptyTab tabLabel="Login Management" comingSoon />;
+            case 'schedule':   return <EmptyTab tabLabel="Schedule" comingSoon />;
+            case 'school':     return <EmptyTab tabLabel="School" comingSoon />;
+            default:           return <DashboardTab {...props} />;
+        }
+    };
 
     return (
-        <div className="lumina-profile" data-testid="lumina-student-profile">
-            <div className="lp-shell">
-                {/* ===== LEFT PANEL — Roster ===== */}
-                <aside className="lp-left" data-testid="roster-panel">
-                    <div className="lp-left__filters">
+        <div className="lumina-profile-page" data-testid="lumina-student-profile">
+
+            {/* ===== TOP ACTION BAR ===== */}
+            <div className="lumina-profile-topbar" data-testid="profile-actionbar">
+                <span className="topbar-name" data-testid="profile-actionbar-name">
+                    {fullName || (studentLoading ? 'Loading…' : 'No student selected')}
+                </span>
+                <div className="topbar-actions">
+                    {isAdmin && (
+                        <TopBarAction
+                            icon={Trash2}
+                            label="Delete"
+                            onClick={handleDelete}
+                            disabled={!student}
+                            danger
+                            testid="profile-delete-btn"
+                        />
+                    )}
+                    <TopBarAction
+                        icon={Bell}
+                        label="Alerts"
+                        onClick={handleAlerts}
+                        disabled={!student}
+                        testid="profile-alerts-btn"
+                    />
+                    <TopBarAction
+                        icon={Mail}
+                        label="Email Instructors"
+                        onClick={handleEmailInstructors}
+                        disabled={!student}
+                        testid="profile-email-btn"
+                    />
+                    <TopBarAction
+                        icon={BarChart3}
+                        label="Reports"
+                        onClick={handleReports}
+                        disabled={!student}
+                        testid="profile-reports-btn"
+                    />
+                </div>
+            </div>
+
+            {/* ===== 3-PANEL BODY ===== */}
+            <div className="lumina-profile-body">
+
+                {/* LEFT: ROSTER */}
+                <aside className="lumina-profile-left" data-testid="roster-panel">
+                    <div className="roster-filters">
                         <div className="lp-field">
                             <label className="lp-field__label">Type</label>
-                            <select className="lp-select" value="Student" disabled data-testid="filter-type">
+                            <select className="lp-select" value={typeFilter} disabled data-testid="filter-type">
                                 <option>Student</option>
                                 <option>Staff</option>
                             </select>
@@ -219,8 +297,8 @@ export default function StudentProfilePage() {
                             <label className="lp-field__label">Status</label>
                             <select
                                 className="lp-select"
-                                value={status}
-                                onChange={(e) => setStatus(e.target.value)}
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
                                 data-testid="filter-status"
                             >
                                 {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -230,12 +308,25 @@ export default function StudentProfilePage() {
                             <label className="lp-field__label">Substatus</label>
                             <select
                                 className="lp-select"
-                                value={grade}
-                                onChange={(e) => setGrade(e.target.value)}
+                                value={substatusFilter}
+                                onChange={(e) => setSubstatusFilter(e.target.value)}
                                 data-testid="filter-grade"
                             >
                                 {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
                             </select>
+                        </div>
+                        <div className="roster-nextyear">
+                            <input
+                                type="checkbox"
+                                id="ny-filter"
+                                checked={nextYearFilter}
+                                onChange={(e) => setNextYearFilter(e.target.checked)}
+                                data-testid="filter-nextyear"
+                            />
+                            <label htmlFor="ny-filter">Next year filter</label>
+                            <a href="#adv" onClick={(e) => { e.preventDefault(); toast.info('Advanced filters coming soon.'); }}>
+                                Adv. Filter
+                            </a>
                         </div>
                         <div className="lp-field">
                             <label className="lp-field__label">Search</label>
@@ -255,7 +346,7 @@ export default function StudentProfilePage() {
                         </div>
                     </div>
 
-                    <div className="lp-roster" data-testid="roster-list">
+                    <div className="roster-list" data-testid="roster-list">
                         {rosterLoading ? (
                             <div className="lp-roster__empty">
                                 <Loader2 className="animate-spin inline-block mr-2" size={14} />
@@ -281,38 +372,16 @@ export default function StudentProfilePage() {
                         )}
                     </div>
 
-                    <div className="lp-left__footer">
-                        <span className="lp-left__count" data-testid="roster-count">
-                            Count: {filteredRoster.length}
-                        </span>
+                    <div className="roster-footer">
+                        <span data-testid="roster-count">Count: {filteredRoster.length}</span>
                         <Link to="/students/manage" className="lp-link" data-testid="roster-add-link">
                             Add
                         </Link>
                     </div>
                 </aside>
 
-                {/* ===== ACTION BAR ===== */}
-                <header className="lp-actionbar" data-testid="profile-actionbar">
-                    <div className="lp-actionbar__name" data-testid="profile-actionbar-name">
-                        {fullName || (studentLoading ? 'Loading…' : 'No student selected')}
-                    </div>
-                    <div className="lp-actionbar__actions">
-                        {isAdmin && student && (
-                            <button
-                                type="button"
-                                className="lp-iconbtn lp-iconbtn--danger"
-                                onClick={handleDelete}
-                                data-testid="profile-delete-btn"
-                            >
-                                <Trash2 size={16} />
-                                <span>Delete</span>
-                            </button>
-                        )}
-                    </div>
-                </header>
-
-                {/* ===== CENTER PANEL ===== */}
-                <main className="lp-center" data-testid="profile-center">
+                {/* CENTER: PROFILE CONTENT */}
+                <main className="lumina-profile-center" data-testid="profile-center">
                     {studentLoading ? (
                         <div className="lp-empty">
                             <Loader2 className="animate-spin" style={{ display: 'inline-block', marginRight: 8 }} />
@@ -320,27 +389,23 @@ export default function StudentProfilePage() {
                         </div>
                     ) : !student ? (
                         <div className="lp-empty">
-                            <h4>No student selected</h4>
-                            <p>Pick a student from the left to view their profile.</p>
+                            <h4>Select a student from the list</h4>
                         </div>
                     ) : (
-                        <TabComponent
-                            student={student}
-                            classMap={classMap}
-                            onReload={() => loadStudent(student.id)}
-                            comingSoon={activeTabConfig.comingSoon}
-                            tabLabel={activeTabConfig.label}
-                        />
+                        <>
+                            <h1 className="lp-center__title" data-testid="profile-student-name">{fullName}</h1>
+                            {renderActiveTab()}
+                        </>
                     )}
                 </main>
 
-                {/* ===== RIGHT PANEL — Tabs ===== */}
-                <nav className="lp-right" data-testid="profile-tabs">
+                {/* RIGHT: SECTION NAV TABS */}
+                <nav className="lumina-profile-right" data-testid="profile-tabs">
                     {TABS.map((t) => (
                         <button
                             key={t.key}
                             type="button"
-                            className={`lp-right__tab ${activeTab === t.key ? 'lp-right__tab--active' : ''}`}
+                            className={`rnav-tab ${activeTab === t.key ? 'active' : ''}`}
                             onClick={() => onTabChange(t.key)}
                             data-testid={`profile-tab-${t.key}`}
                         >
@@ -348,10 +413,8 @@ export default function StudentProfilePage() {
                         </button>
                     ))}
                 </nav>
+
             </div>
         </div>
     );
 }
-
-// Re-export small helpers for tab components
-export { GraduationCap, School, Users, Plus, ExternalLink, Home, Phone, Smartphone, Mail, User };

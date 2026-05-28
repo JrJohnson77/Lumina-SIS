@@ -43,11 +43,6 @@ export default function BehaviorTab({ student }) {
 
     return (
         <>
-            <h1 className="lp-center__title">
-                <AlertTriangle size={22} style={{ verticalAlign: 'middle', marginRight: 8, color: '#1565C0' }} />
-                Behavior
-            </h1>
-
             <div className="lp-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
                 <div className="lp-card" data-testid="beh-major">
                     <div className="lp-card__title" style={{ fontSize: 11, color: '#9E9E9E' }}>Major</div>

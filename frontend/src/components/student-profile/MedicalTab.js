@@ -43,11 +43,6 @@ export default function MedicalTab({ student }) {
 
     return (
         <>
-            <h1 className="lp-center__title">
-                <Heart size={22} style={{ verticalAlign: 'middle', marginRight: 8, color: '#1565C0' }} />
-                Medical
-            </h1>
-
             {loading ? (
                 <div className="lp-empty" style={{ padding: 24 }}>Loading medical record…</div>
             ) : !record ? (
