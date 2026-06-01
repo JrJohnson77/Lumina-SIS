@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -244,14 +245,16 @@ export default function DashboardPage() {
                     <CardContent>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {myClasses.map((c) => (
-                                <div 
+                                <Link 
                                     key={c.id}
-                                    className="p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-muted/40 transition-colors"
+                                    to={`/attendance?class=${c.id}`}
+                                    className="p-3 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/40 hover:shadow-sm transition-all group cursor-pointer block"
                                     data-testid={`teacher-class-${c.id}`}
+                                    title={`Open attendance for ${c.name}`}
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0">
-                                            <p className="font-semibold text-sm text-foreground truncate">{c.name}</p>
+                                            <p className="font-semibold text-sm text-foreground truncate group-hover:text-primary transition-colors">{c.name}</p>
                                             <p className="text-xs text-muted-foreground">Grade {c.grade_level} · {c.academic_year}</p>
                                         </div>
                                         <span className="text-[11px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-semibold whitespace-nowrap">
@@ -261,7 +264,10 @@ export default function DashboardPage() {
                                     {c.room_number && (
                                         <p className="text-[11px] text-muted-foreground mt-1.5">Room {c.room_number}</p>
                                     )}
-                                </div>
+                                    <p className="text-[10px] text-primary/70 font-medium mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        Open attendance →
+                                    </p>
+                                </Link>
                             ))}
                         </div>
                     </CardContent>

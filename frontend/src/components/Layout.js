@@ -65,7 +65,8 @@ const NAV_GROUPS = [
         icon: Users,
         items: [
             { to: '/students', label: 'Students', icon: GraduationCap, roles: ['superuser', 'admin', 'teacher', 'parent'] },
-            { to: '/users', label: 'Staff & Users', icon: Users, roles: ['superuser', 'admin'] },
+            { to: '/staff', label: 'Staff', icon: Users, roles: ['superuser', 'admin'] },
+            { to: '/users', label: 'Users & Roles', icon: Shield, roles: ['superuser', 'admin'] },
         ],
     },
     {

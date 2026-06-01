@@ -16,6 +16,7 @@ import GradebookPage from "./pages/GradebookPage";
 import GradesPage from "./pages/GradesPage";
 import ReportsPage from "./pages/ReportsPage";
 import UsersPage from "./pages/UsersPage";
+import StaffProfilePage from "./pages/StaffProfilePage";
 import ImportExportPage from "./pages/ImportExportPage";
 import ReportTemplateDesigner from "./pages/ReportTemplateDesigner";
 import AdmissionsPage from "./pages/AdmissionsPage";
@@ -203,6 +204,22 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute allowedRoles={['superuser', 'admin']}>
                         <UsersPage />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/staff" 
+                element={
+                    <ProtectedRoute allowedRoles={['superuser', 'admin']}>
+                        <StaffProfilePage />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/staff/:userId" 
+                element={
+                    <ProtectedRoute allowedRoles={['superuser', 'admin']}>
+                        <StaffProfilePage />
                     </ProtectedRoute>
                 } 
             />

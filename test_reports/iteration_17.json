@@ -1,0 +1,53 @@
+{
+  "summary": "End-to-end verification of quick-wins f+g+h: (f) new lean 3-panel Staff Profile at /staff, (g) Teacher Dashboard 'My Classes' tiles now navigate to /attendance?class=<id> with pre-fill, (h) Sort-by toggle (Last Name / First Name / Student ID) on Student Profile roster. Backend new endpoint GET /api/users/{user_id} fully verified via pytest (6/6 pass) including cross-tenant 403, 404 unknown, 401/403 unauth, and teacher role denial. All frontend structural, filter, navigation, tab-reset, dashboard cards, contact/login tabs, empty-submit info-toast assertions pass. Phase-1 Student Profile data-testids remain intact (no regression).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "BACKEND pytest (6/6): test_admin_fetches_own_school_user, test_cross_tenant_access_denied (403 SUNF->RVSD), test_unknown_user_returns_404, test_unauthenticated_blocked, test_teacher_role_cannot_fetch_user (role gating), test_sunf_admin_users_list_scoped (no password_hash + tenant scoping)",
+    "SUNF admin login -> /staff auto-redirects to /staff/<first-id>#dashboard (verified id=fb1275ff-c50f-4f71-a017-980d962e45f4)",
+    "Staff Profile 3-panel structure: [data-testid='lumina-staff-profile'] wraps staff-actionbar then 3-panel body (staff-roster-panel | staff-center | staff-tabs); H1 staff-name lives INSIDE staff-center (h1_center=True, h1_roster=False); 3 tab buttons live INSIDE staff-tabs only (tabs_in_tabs=3, tabs_in_center=0)",
+    "Staff roster filters: filter-type disabled with value='Staff'; filter-role options = [All Staff, Admin, Teacher, Superuser]; filter-search live filtering input present",
+    "Roster shows 7 SUNF staff rows; NO parents in roster (verified via text scan)",
+    "Click roster row while on Contact tab -> URL updates to /staff/<id>#dashboard AND tab resets to Dashboard AND row gets 'lp-roster__row--active' class",
+    "Dashboard tab renders all 5 cards: staff-card-avatar, staff-card-identity, staff-card-role, staff-card-contact-summary, staff-card-permissions",
+    "Contact tab renders staff-contact-card + staff-address-card",
+    "Login Management tab renders staff-login-summary + staff-reset-card with staff-new-username, staff-new-password, staff-save-credentials wired",
+    "Empty submit on staff-save-credentials -> info toast 'Enter a new username or password.' (no destructive call fired — form correctly wired)",
+    "TEACHER (sarah.thompson.sunf): Dashboard 'My Classes' shows 2 tiles, each is an <A> tag with href='/attendance?class=<class_id>' and data-testid='teacher-class-<id>'",
+    "Click first teacher-class tile -> URL becomes /attendance?class=a9024c7c-... AND AttendancePage's Class selector is pre-populated to 'SUNF-Grade 1A' (shadcn Select trigger text confirmed) AND attendance roster auto-fetched (Sofia Davis, Jack Garcia, etc. shown)",
+    "STUDENT PROFILE Sort-by: filter-sort dropdown present with exactly 3 options [Last Name (default, value='last'), First Name (value='first'), Student ID (value='id')]",
+    "sortBy='last' (default) -> first row = 'Anderson, Bella Rose' (Last, First Middle format, alphabetical)",
+    "sortBy='first' -> first row = 'Alexander Lee Hernandez' (first-name first format, NO comma)",
+    "sortBy='id' -> first row = 'SUNF-1001 · Lopez, Ethan' (id-prefixed format with '·' separator, sorted by student_id ascending)",
+    "Switching back to sortBy='last' restores 'Anderson, Bella Rose' ordering",
+    "Phase 1 regression: roster-panel, profile-center, profile-tabs, profile-student-name, profile-tab-dashboard all still present",
+    "Existing filters intact: filter-type, filter-status, filter-grade, filter-nextyear, filter-search (no regression from sort addition)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_staff_profile.py",
+    "/app/test_reports/pytest/staff_profile_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/users/{user_id} correctly projects out _id and password_hash via MongoDB projection — good practice; returns UserResponse Pydantic model.",
+    "Cross-tenant 403 check uses school_code comparison after the user is found; this is correct (no info leak about user existence at the school level beyond 'denied vs not found' — acceptable).",
+    "StaffProfilePage.js properly mirrors StudentProfilePage 3-panel flexbox pattern using the shared /styles/student-profile.css; H1 lives only inside staff-center and tab buttons only inside staff-tabs (matching the structural lesson from iteration 16).",
+    "Teacher 'My Classes' tile correctly converted from <div> to <Link to=`/attendance?class=${c.id}`>; preserves data-testid='teacher-class-<id>' so existing selectors still match.",
+    "AttendancePage uses useSearchParams() inside useEffect with searchParams in dep array — handles both mount and subsequent ?class= changes correctly (verified by URL→pre-fill in screenshot).",
+    "StudentProfilePage SORT_OPTIONS + SORT_KEYS + compareByKey is a clean local utility; sortBy added to useMemo dep array so re-sort triggers on toggle. No backend change needed (sort is client-side).",
+    "Minor: shadcn Select component on AttendancePage does NOT expose its current value via a queryable DOM attribute, which made automated assertion harder. Consider adding data-testid='select-class-trigger' and aria-label with current value for testability. Functionality is correct — purely a testability improvement."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_staff_profile.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "100% (all 18 functional checks pass)"},
+  "test_credentials": "SUNF admin (school=SUNF, user=admin, pw=Admin@123); SUNF teacher (school=SUNF, user=sarah.thompson.sunf, pw=Teacher@123); RVSD admin used in backend cross-tenant test (school=RVSD, user=admin, pw=Admin@123). No passwords or usernames were modified during testing.",
+  "seed_data_creation": "None. staff-save-credentials was clicked only with empty inputs to trigger the info-toast guard; no PUT /api/users/<id>/credentials request was sent.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Three features fully shipped & verified. Staff Profile (/staff) mirrors Student Profile 3-panel flexbox layout with prefix 'staff-' on every data-testid. Teacher Dashboard My Classes tiles are <Link> anchors with href='/attendance?class=<id>'. AttendancePage reacts to useSearchParams. StudentProfilePage gains a 4th roster filter 'Sort by' with 3 options that re-format AND re-sort roster rows. Backend GET /api/users/{user_id} is admin-only, school-scoped, returns no password_hash. Suggest adding data-testid='select-class-trigger' on AttendancePage's shadcn Class Select for easier future automated assertions (purely cosmetic for testability)."
+}

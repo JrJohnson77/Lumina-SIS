@@ -1162,6 +1162,23 @@ async def get_users(current_user: dict = Depends(require_roles([UserRole.ADMIN])
     users = await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(1000)
     return [UserResponse(**u) for u in users]
 
+@api_router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user_by_id(
+    user_id: str,
+    current_user: dict = Depends(require_roles([UserRole.ADMIN])),
+):
+    """GET /api/users/{user_id} — staff profile detail. Admin/Superuser.
+    Non-superusers may only fetch users in their own school."""
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if (
+        current_user["role"] != UserRole.SUPERUSER
+        and user.get("school_code") != current_user["school_code"]
+    ):
+        raise HTTPException(status_code=403, detail="Cross-tenant access denied")
+    return UserResponse(**user)
+
 @api_router.post("/users", response_model=UserResponse)
 async def create_user(user_data: UserCreate, current_user: dict = Depends(require_roles([UserRole.ADMIN]))):
     """Admin can create users in their school, superuser can create in any school"""

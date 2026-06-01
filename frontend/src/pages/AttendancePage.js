@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -30,10 +31,11 @@ const statusConfig = {
 };
 
 export default function AttendancePage() {
+    const [searchParams] = useSearchParams();
     const [classes, setClasses] = useState([]);
     const [students, setStudents] = useState([]);
     const [attendance, setAttendance] = useState([]);
-    const [selectedClass, setSelectedClass] = useState('');
+    const [selectedClass, setSelectedClass] = useState(searchParams.get('class') || '');
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -43,6 +45,15 @@ export default function AttendancePage() {
     useEffect(() => {
         fetchInitialData();
     }, []);
+
+    // Honor ?class=<id> query string when it changes after mount
+    useEffect(() => {
+        const fromUrl = searchParams.get('class');
+        if (fromUrl && fromUrl !== selectedClass) {
+            setSelectedClass(fromUrl);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
 
     useEffect(() => {
         if (selectedClass && selectedDate) {

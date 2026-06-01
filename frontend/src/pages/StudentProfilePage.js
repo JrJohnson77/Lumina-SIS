@@ -30,6 +30,39 @@ const GRADE_OPTIONS = [
     'Grade: 06', 'Grade: 07', 'Grade: 08', 'Grade: 09',
     'Grade: 10', 'Grade: 11', 'Grade: 12',
 ];
+const SORT_OPTIONS = [
+    { key: 'last',  label: 'Last Name' },
+    { key: 'first', label: 'First Name' },
+    { key: 'id',    label: 'Student ID' },
+];
+
+const SORT_KEYS = {
+    last: (s) => [
+        (s.last_name || '').toLowerCase(),
+        (s.first_name || '').toLowerCase(),
+        (s.middle_name || '').toLowerCase(),
+    ],
+    first: (s) => [
+        (s.first_name || '').toLowerCase(),
+        (s.last_name || '').toLowerCase(),
+        (s.middle_name || '').toLowerCase(),
+    ],
+    id: (s) => [
+        (s.student_id || '').toLowerCase() || '\uffff', // empty IDs sort last
+        (s.last_name || '').toLowerCase(),
+        (s.first_name || '').toLowerCase(),
+    ],
+};
+
+const compareByKey = (keyFn) => (a, b) => {
+    const ka = keyFn(a);
+    const kb = keyFn(b);
+    for (let i = 0; i < ka.length; i++) {
+        if (ka[i] < kb[i]) return -1;
+        if (ka[i] > kb[i]) return 1;
+    }
+    return 0;
+};
 
 const TABS = [
     { key: 'dashboard',  label: 'Dashboard' },
@@ -86,6 +119,7 @@ export default function StudentProfilePage() {
     const [typeFilter] = useState('Student'); // disabled in phase 1
     const [statusFilter, setStatusFilter] = useState('Enrolled');
     const [substatusFilter, setSubstatusFilter] = useState('All Grades');
+    const [sortBy, setSortBy] = useState('last');
     const [nextYearFilter, setNextYearFilter] = useState(false);
     const [search, setSearch] = useState('');
 
@@ -155,10 +189,10 @@ export default function StudentProfilePage() {
         }
     }, [studentId, roster, rosterLoading, navigate, activeTab]);
 
-    // Filter roster
+    // Filter + sort roster
     const filteredRoster = useMemo(() => {
         const term = search.trim().toLowerCase();
-        return roster.filter((s) => {
+        const filtered = roster.filter((s) => {
             const st = (s.enrollment_status || 'enrolled').toLowerCase();
             if (st !== statusFilter.toLowerCase()) return false;
             if (!matchesGradeFilter(s, classMap, substatusFilter)) return false;
@@ -168,7 +202,9 @@ export default function StudentProfilePage() {
             }
             return true;
         });
-    }, [roster, statusFilter, substatusFilter, search, classMap]);
+        const keyFn = SORT_KEYS[sortBy] || SORT_KEYS.last;
+        return [...filtered].sort(compareByKey(keyFn));
+    }, [roster, statusFilter, substatusFilter, search, classMap, sortBy]);
 
     const onTabChange = useCallback((key) => {
         setActiveTab(key);
@@ -315,6 +351,17 @@ export default function StudentProfilePage() {
                                 {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
                             </select>
                         </div>
+                        <div className="lp-field">
+                            <label className="lp-field__label">Sort by</label>
+                            <select
+                                className="lp-select"
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value)}
+                                data-testid="filter-sort"
+                            >
+                                {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                            </select>
+                        </div>
                         <div className="roster-nextyear">
                             <input
                                 type="checkbox"
@@ -356,7 +403,15 @@ export default function StudentProfilePage() {
                             <div className="lp-roster__empty">No students match the current filters.</div>
                         ) : (
                             filteredRoster.map((s) => {
-                                const display = `${s.last_name || ''}, ${s.first_name || ''}${s.middle_name ? ' ' + s.middle_name : ''}`;
+                                let display;
+                                if (sortBy === 'first') {
+                                    display = `${s.first_name || ''}${s.middle_name ? ' ' + s.middle_name : ''} ${s.last_name || ''}`.trim();
+                                } else if (sortBy === 'id') {
+                                    const idStr = s.student_id || '—';
+                                    display = `${idStr} · ${s.last_name || ''}, ${s.first_name || ''}`;
+                                } else {
+                                    display = `${s.last_name || ''}, ${s.first_name || ''}${s.middle_name ? ' ' + s.middle_name : ''}`;
+                                }
                                 const isActive = s.id === studentId;
                                 return (
                                     <div
