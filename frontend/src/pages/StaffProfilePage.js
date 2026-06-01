@@ -275,7 +275,7 @@ export default function StaffProfilePage() {
 function StaffDashboardTab({ staff, initials }) {
     return (
         <div className="lp-dashboard">
-            {/* Avatar card */}
+            {/* Avatar card (left col, spans 2 rows) */}
             <div className="lp-card lp-card--photo" data-testid="staff-card-avatar">
                 {staff.photo_url ? (
                     <img src={staff.photo_url} alt={staff.name} className="lp-photo" />
@@ -291,24 +291,32 @@ function StaffDashboardTab({ staff, initials }) {
                         {initials}
                     </div>
                 )}
+                <div style={{ marginTop: 12, textAlign: 'center', width: '100%' }}>
+                    <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 4 }}>
+                        Username
+                    </div>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'hsl(var(--foreground))', wordBreak: 'break-all' }}>
+                        {staff.username}
+                    </div>
+                </div>
             </div>
 
-            {/* Identity */}
+            {/* Identity (row 1, spans 2 cols) */}
             <div className="lp-card lp-card--span2" data-testid="staff-card-identity">
                 <div className="lp-card__header"><h3 className="lp-card__title"><UserIcon />Identity</h3></div>
                 <div className="lp-kv">
+                    <span className="lp-kv__k">Full Name</span>
+                    <span className="lp-kv__v">{[staff.first_name, staff.middle_name, staff.last_name].filter(Boolean).join(' ') || staff.name || '—'}</span>
                     <span className="lp-kv__k">Salutation</span>
                     <span className="lp-kv__v">{staff.salutation || '—'}</span>
                     <span className="lp-kv__k">Gender</span>
                     <span className="lp-kv__v">{staff.gender || '—'}</span>
-                    <span className="lp-kv__k">Username</span>
-                    <span className="lp-kv__v" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12.5 }}>{staff.username}</span>
                     <span className="lp-kv__k">School</span>
                     <span className="lp-kv__v">{staff.school_code}</span>
                 </div>
             </div>
 
-            {/* Role & Access */}
+            {/* Row 2 left: Role & Access */}
             <div className="lp-card" data-testid="staff-card-role">
                 <div className="lp-card__header"><h3 className="lp-card__title"><Shield />Role &amp; Access</h3></div>
                 <div className="lp-kv">
@@ -327,7 +335,7 @@ function StaffDashboardTab({ staff, initials }) {
                 </div>
             </div>
 
-            {/* Contact summary */}
+            {/* Row 2 right: Contact summary */}
             <div className="lp-card" data-testid="staff-card-contact-summary">
                 <div className="lp-card__header"><h3 className="lp-card__title"><Mail />Contact</h3></div>
                 <div className="lp-kv">
@@ -340,8 +348,8 @@ function StaffDashboardTab({ staff, initials }) {
                 </div>
             </div>
 
-            {/* Permissions card (full row) */}
-            <div className="lp-card lp-card--span4" data-testid="staff-card-permissions">
+            {/* Row 3: Permissions list (full width) */}
+            <div className="lp-card lp-card--span3" data-testid="staff-card-permissions">
                 <div className="lp-card__header"><h3 className="lp-card__title"><BadgeCheck />Granted Permissions</h3></div>
                 {(!staff.permissions || staff.permissions.length === 0) ? (
                     <div style={{ fontSize: 12.5, color: 'hsl(var(--muted-foreground))', padding: '4px 0' }}>

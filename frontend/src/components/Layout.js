@@ -223,6 +223,25 @@ export const Layout = ({ children }) => {
     const { user, logout, schoolCode } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
+    const [schoolName, setSchoolName] = useState('');
+
+    // Fetch the user's school's display name once for header branding
+    useEffect(() => {
+        let cancelled = false;
+        if (!schoolCode) { setSchoolName(''); return; }
+        (async () => {
+            try {
+                const axios = (await import('axios')).default;
+                const res = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/schools`);
+                if (cancelled) return;
+                const match = (res.data || []).find((s) => s.school_code === schoolCode);
+                setSchoolName(match?.name || schoolCode);
+            } catch (_e) {
+                if (!cancelled) setSchoolName(schoolCode);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [schoolCode]);
 
     // initialize open groups: persisted state OR group containing current route
     const [openGroups, setOpenGroups] = useState(() => {
@@ -352,7 +371,16 @@ export const Layout = ({ children }) => {
                         <Menu className="w-5 h-5" />
                     </button>
 
-                    <div className="flex-1 md:flex-none" />
+                    <div className="flex-1 md:flex-none md:min-w-[260px]">
+                        <div className="hidden md:flex flex-col leading-tight pl-1" data-testid="app-header-brand">
+                            <span className="text-lg font-bold tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', color: 'hsl(var(--primary))' }}>
+                                Lumina-SIS
+                            </span>
+                            <span className="text-xs font-medium text-muted-foreground truncate" data-testid="app-header-school">
+                                {schoolName || schoolCode || ''}
+                            </span>
+                        </div>
+                    </div>
 
                     <div className="flex items-center gap-2">
                         <DropdownMenu>

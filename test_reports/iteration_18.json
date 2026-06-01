@@ -1,0 +1,53 @@
+{
+  "summary": "End-to-end verification of the 3 layout/UI fixes: (1) Global header brand block 'Lumina-SIS' + school name on every page, (2) Next year filter + Adv. Filter removal from Student Profile roster, (3) Dashboard grid 3-column fix (220px 1fr 1fr) plus .lp-badge white-space:nowrap to stop char-per-line wrapping. Tested on SUNF admin (Sunflower Academy) and RVSD admin (Riverside International School), including a real Grade 3 RVSD student (Alexander Joseph Anderson, RVSD-1068, RVSD-Grade 3B). 31/31 functional assertions PASS. Also verified Staff Profile mirror layout: Avatar card holds Username, Identity card now has Full Name row, Permissions card spans 3 cols.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global header brand block", "issues": ["Two-line brand block (Lumina-SIS + school name) on a flex items-center header sits a bit tight vertically; the long 'Riverside International School' subtitle visually appears slightly close to the bottom edge of the header row on /dashboard and /staff. Functional/text content is correct (text-content tests return full strings) — purely a vertical-spacing polish item. Consider header items-start or increased min-h-[56px] on the top bar."]}
+    ]
+  },
+  "passed_tests": [
+    "SUNF admin login -> /dashboard; app-header-brand + app-header-school present; brand text = 'Lumina-SIS', subtitle = 'Sunflower Academy' (fetched from /api/schools, not fallback 'SUNF')",
+    "User menu (data-testid='user-menu-btn') visible on right of header — brand+menu coexist with no overflow on 1920px viewport",
+    "Brand block persists on /students and /staff (not just /dashboard)",
+    "filter-nextyear is NOT in DOM on /students; 'Next year filter' text absent from page body; 'Adv. Filter' link absent",
+    "Roster filters present: filter-type, filter-status, filter-grade, filter-sort, filter-search (5 widgets — exactly as required, no 6th 'Next year filter' row)",
+    "Student Dashboard grid: .lp-dashboard gridTemplateColumns resolves to '220px 458px 458px' on 1920px viewport (3 columns, first col 220px as spec'd)",
+    "Zero stale .lp-card--span4 elements remain in the DOM",
+    "span2 count=1 (Contact card on row 1 covering cols 2-3), span3 count=2 (Attendance—Year and Family full-width) — exact layout spec match",
+    ".lp-badge computed white-space = 'nowrap' (CSS fix applied)",
+    "Staff page /staff: data-testid='staff-card-avatar', 'staff-card-identity', 'staff-card-permissions' all present",
+    "Staff Identity card text contains 'Full Name' AND does NOT contain 'Username' (moved out)",
+    "Staff Avatar card text contains 'Username' (relocated successfully)",
+    "Staff dashboard grid also resolves to 3 columns",
+    "Staff Permissions card has class 'lp-card lp-card--span3' (span4 -> span3 conversion successful)",
+    "RVSD admin login -> brand subtitle = 'Riverside International School' (correct, distinct from SUNF — proves dynamic school fetch works per tenant)",
+    "RVSD Grade 3 student located: Alexander Joseph Anderson (RVSD-1068, RVSD-Grade 3B)",
+    "School Info card width = 458px on that student (well > narrow-threshold 250px)",
+    "'ENROLLED' badge inside School Info: w=79px h=21px white-space=nowrap — horizontal pill, NOT vertical letter-stack",
+    "'Current' field value 'Grade 3 · RVSD-Grade 3B' renders with bbox w=314 h=19 — single line, NO per-character wrap (would have been ~400px tall if char-wrapped)",
+    "Visual screenshot confirms full intended layout: Row1 = Photo(220px) + Contact(2-3), Row2 = SchoolInfo + StudentInfo, Row3 = Attendance—Year w/ donut, Row4 = Family"
+  ],
+  "test_report_links": [
+    "/app/test_reports/iteration_18.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Layout.js correctly dynamically imports axios inside the school-fetch useEffect (avoids SSR/hydration concerns); falls back to schoolCode subtitle if /api/schools 4xx/5xx — graceful degradation verified by code path.",
+    "useEffect dep array [schoolCode] is correct; cleanup flag `cancelled` prevents setState-on-unmount races during quick route changes.",
+    "CSS .lp-dashboard grid-template-columns: 220px 1fr 1fr is well-defined; .lp-card--span2 (cols 2-3) and .lp-card--span3 (full row) classes cover all needed layout permutations after removing the legacy 4-col span4. Mobile breakpoint at 1fr full-stack is preserved at line 609.",
+    ".lp-badge white-space: nowrap (line 505) is the right fix for the character-per-line wrapping observed in narrow flex/grid children. Combined with .lp-kv value column minmax(0,1fr), this prevents text from over-expanding the grid track.",
+    "StaffProfilePage moves Username from Identity card to Avatar card and adds Full Name row to Identity — content reorganization is clean and matches problem statement exactly.",
+    "Minor polish (non-blocking): the global header uses items-center on a 2-line brand block; on narrow widths or when school name is long (e.g., 'Riverside International School'), the subtitle text sits visually tight. Suggest a min-h on the header (e.g., min-h-[56px]) for breathing room — no functional impact."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only review)", "frontend": "100% (31/31 assertions pass across SUNF and RVSD tenants, including the real Grade 3 wrap-fix repro)"},
+  "test_credentials": "SUNF admin (school=SUNF, user=admin, pw=Admin@123); RVSD admin (school=RVSD, user=admin, pw=Admin@123). No credentials modified.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Header brand fix lives in Layout.js between line 374-383: <div className='hidden md:flex flex-col leading-tight pl-1' data-testid='app-header-brand'> with child data-testid='app-header-school'. School-name comes from /api/schools and is matched by school_code. Brand block is hidden on mobile (hidden md:flex). Dashboard grid is 3-col (220px 1fr 1fr) — any new dashboard card must use .lp-card--span2 (covers 2 of 3 fr-cols) or .lp-card--span3 (full width) — span4 no longer exists. .lp-badge white-space:nowrap is global; any badge appearing in a narrow flex/grid cell will stay horizontal. Staff Profile mirrors student dashboard 3-col grid; Permissions card uses .lp-card--span3. For repro of the wrap-fix, use RVSD admin and pick any student in RVSD-Grade 3B (e.g., RVSD-1068 Alexander Joseph Anderson). No backend changes shipped in this iteration. Earlier filter-nextyear and nextYearFilter state are fully removed; no references remain in StudentProfilePage.js (grep clean).",
+  "rca of the issue": "Original bug: .lp-dashboard used 4 grid columns (200px repeat(3,1fr)) so each non-photo card was assigned a ~280px-wide column. With the .lp-kv pattern (label + value flex row) and no minmax(0,1fr) constraint on the value column, long single-word/badge content like 'Grade 3 · RVSD-Grade 3B' and 'ENROLLED' forced the grid track to overflow horizontally on parents that had overflow constraints, then text wrapped per-character due to overflow-wrap:anywhere on a stretched container. Fix is two-fold: (a) reduce grid to 220px 1fr 1fr so each fr-col is wider (~458px on desktop), (b) apply white-space:nowrap to .lp-badge and minmax(0,1fr) to the .lp-kv value column so long strings can't force overflow. Verified empirically: on the exact reproducing student (RVSD-1068), 'Grade 3 · RVSD-Grade 3B' now occupies a 314x19px box (single line) and the 'ENROLLED' badge occupies a 79x21px horizontal pill."
+}

@@ -241,7 +241,7 @@ export default function DashboardTab({ student, classMap }) {
                 </div>
 
                 {/* === Family === */}
-                <div className="lp-card lp-card--span4" data-testid="card-family">
+                <div className="lp-card lp-card--span3" data-testid="card-family">
                     <div className="lp-card__header">
                         <h3 className="lp-card__title"><Users />Family</h3>
                         <Link to="/students" className="lp-btn lp-btn--outline lp-btn--sm">

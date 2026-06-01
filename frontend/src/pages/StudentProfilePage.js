@@ -120,7 +120,6 @@ export default function StudentProfilePage() {
     const [statusFilter, setStatusFilter] = useState('Enrolled');
     const [substatusFilter, setSubstatusFilter] = useState('All Grades');
     const [sortBy, setSortBy] = useState('last');
-    const [nextYearFilter, setNextYearFilter] = useState(false);
     const [search, setSearch] = useState('');
 
     // active profile
@@ -361,19 +360,6 @@ export default function StudentProfilePage() {
                             >
                                 {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                             </select>
-                        </div>
-                        <div className="roster-nextyear">
-                            <input
-                                type="checkbox"
-                                id="ny-filter"
-                                checked={nextYearFilter}
-                                onChange={(e) => setNextYearFilter(e.target.checked)}
-                                data-testid="filter-nextyear"
-                            />
-                            <label htmlFor="ny-filter">Next year filter</label>
-                            <a href="#adv" onClick={(e) => { e.preventDefault(); toast.info('Advanced filters coming soon.'); }}>
-                                Adv. Filter
-                            </a>
                         </div>
                         <div className="lp-field">
                             <label className="lp-field__label">Search</label>

@@ -337,15 +337,15 @@
 .lp-card__link:hover { background: hsl(var(--primary) / 0.08); }
 .lp-card__link svg { width: 12px; height: 12px; }
 
-/* Dashboard grid */
+/* Dashboard grid: photo (left, span 2 rows) | content cards
+   3-col grid prevents narrow single-col cards from forcing text to wrap character-by-character. */
 .lp-dashboard {
     display: grid;
-    grid-template-columns: 200px repeat(3, 1fr);
+    grid-template-columns: 220px 1fr 1fr;
     gap: 16px;
 }
 .lp-dashboard .lp-card--span2 { grid-column: span 2; }
 .lp-dashboard .lp-card--span3 { grid-column: span 3; }
-.lp-dashboard .lp-card--span4 { grid-column: span 4; }
 .lp-dashboard .lp-card--photo {
     grid-row: span 2;
     display: flex;
@@ -373,22 +373,25 @@
 /* Key/value rows */
 .lp-kv {
     display: grid;
-    grid-template-columns: 96px 1fr;
-    gap: 8px 14px;
-    align-items: baseline;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 10px 14px;
+    align-items: start;
 }
 .lp-kv__k {
-    font-size: 11px;
+    font-size: 10.5px;
     color: hsl(var(--muted-foreground));
     text-transform: uppercase;
     letter-spacing: 0.04em;
     font-weight: 600;
+    padding-top: 2px;
 }
 .lp-kv__v {
     font-size: 13.5px;
     color: hsl(var(--foreground));
-    word-break: break-word;
+    word-break: normal;
+    overflow-wrap: anywhere;
     font-weight: 500;
+    line-height: 1.4;
 }
 .lp-kv__v a { color: hsl(var(--primary)); text-decoration: none; font-weight: 500; }
 .lp-kv__v a:hover { text-decoration: underline; }
@@ -499,6 +502,9 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    white-space: nowrap;
+    width: fit-content;
+    max-width: 100%;
 }
 .lp-badge--enrolled, .lp-badge--success {
     background: hsl(160 84% 39% / 0.12);
