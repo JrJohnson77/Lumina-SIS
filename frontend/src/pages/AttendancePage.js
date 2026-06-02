@@ -150,7 +150,16 @@ export default function AttendancePage() {
         }
     };
 
-    const classStudents = students.filter(s => s.class_id === selectedClass);
+    const classStudents = students
+        .filter(s => s.class_id === selectedClass)
+        .sort((a, b) => {
+            const la = (a.last_name || '').toLowerCase();
+            const lb = (b.last_name || '').toLowerCase();
+            if (la !== lb) return la.localeCompare(lb);
+            const fa = (a.first_name || '').toLowerCase();
+            const fb = (b.first_name || '').toLowerCase();
+            return fa.localeCompare(fb);
+        });
     const selectedClassName = classes.find(c => c.id === selectedClass)?.name || '';
 
     // For parents, show their children's attendance
