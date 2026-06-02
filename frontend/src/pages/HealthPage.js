@@ -119,7 +119,7 @@ export default function HealthPage() {
                                         onClick={() => handleStudentSelect(student)}
                                         className={`w-full text-left p-3 rounded-xl hover:bg-muted/50 transition ${selectedStudent?.id === student.id ? 'bg-primary/10 border border-primary' : 'bg-muted/20'}`}
                                     >
-                                        <p className="font-medium">{student.first_name} {student.last_name}</p>
+                                        <p className="font-medium">{student.last_name}, {student.first_name}{student.middle_name ? ` ${student.middle_name}` : ''}</p>
                                         <p className="text-sm text-muted-foreground">{student.student_id}</p>
                                     </button>
                                 ))}
@@ -143,7 +143,7 @@ export default function HealthPage() {
                         <div className="space-y-4">
                             <Card className="rounded-2xl">
                                 <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
-                                    <CardTitle>Health Record: {selectedStudent.first_name} {selectedStudent.last_name}</CardTitle>
+                                    <CardTitle>Health Record: {[selectedStudent.first_name, selectedStudent.middle_name, selectedStudent.last_name].filter(Boolean).join(' ')}</CardTitle>
                                     <div className="flex gap-2 flex-wrap">
                                         <Button size="sm" onClick={() => openDialog('vaccination')} className="rounded-lg" data-testid="open-vaccination-btn">
                                             <Plus className="w-4 h-4 mr-2" />

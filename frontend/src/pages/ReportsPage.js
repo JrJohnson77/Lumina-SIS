@@ -662,7 +662,7 @@ const ClassListReport = ({ students, classInfo }) => {
                             <td className="border border-gray-300 p-2">{index + 1}</td>
                             <td className="border border-gray-300 p-2 font-mono text-xs">{student.student_id || '-'}</td>
                             <td className="border border-gray-300 p-2 font-medium">
-                                {student.first_name} {student.middle_name || ''} {student.last_name}
+                                {[student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ')}
                             </td>
                             <td className="border border-gray-300 p-2 text-center">{student.gender?.[0] || '-'}</td>
                             <td className="border border-gray-300 p-2 text-center">{student.age || '-'}</td>
@@ -745,7 +745,7 @@ const GradebookReport = ({ students, grades, classInfo, term, academicYear, temp
                             return (
                                 <tr key={student.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                     <td className="border border-gray-300 p-1">{index + 1}</td>
-                                    <td className="border border-gray-300 p-1 font-medium">{student.first_name} {student.last_name}</td>
+                                    <td className="border border-gray-300 p-1 font-medium">{[student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ')}</td>
                                     {subjects.map(subject => {
                                         const subjData = studentGrades[subject];
                                         const score = subjData?.score || '-';

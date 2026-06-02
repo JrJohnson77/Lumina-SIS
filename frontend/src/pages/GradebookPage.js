@@ -638,11 +638,18 @@ export default function GradebookPage() {
                                     <SelectValue placeholder="Select student" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {students.map(student => (
-                                        <SelectItem key={student.id} value={student.id}>
-                                            {student.first_name} {student.last_name}
-                                        </SelectItem>
-                                    ))}
+                                    {[...students]
+                                        .sort((a, b) => {
+                                            const la = (a.last_name || '').toLowerCase();
+                                            const lb = (b.last_name || '').toLowerCase();
+                                            if (la !== lb) return la.localeCompare(lb);
+                                            return (a.first_name || '').toLowerCase().localeCompare((b.first_name || '').toLowerCase());
+                                        })
+                                        .map(student => (
+                                            <SelectItem key={student.id} value={student.id}>
+                                                {student.last_name}, {student.first_name}{student.middle_name ? ` ${student.middle_name}` : ''}
+                                            </SelectItem>
+                                        ))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -718,7 +725,7 @@ export default function GradebookPage() {
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold">
-                                    {selectedStudentData.first_name} {selectedStudentData.last_name}
+                                    {[selectedStudentData.first_name, selectedStudentData.middle_name, selectedStudentData.last_name].filter(Boolean).join(' ')}
                                 </h3>
                                 <p className="text-sm text-muted-foreground">
                                     {selectedStudentData.student_id && `ID: ${selectedStudentData.student_id} • `}
