@@ -344,6 +344,24 @@
     grid-template-columns: 220px 1fr 1fr;
     gap: 16px;
 }
+
+/* Light primary-blue hue on dashboard tiles only (Student + Staff profile dashboards).
+   Hovering deepens the hue and lifts the card. */
+.lp-dashboard .lp-card {
+    background: hsl(var(--primary) / 0.045);
+    border-color: hsl(var(--primary) / 0.18);
+}
+.lp-dashboard .lp-card:hover {
+    background: hsl(var(--primary) / 0.07);
+    border-color: hsl(var(--primary) / 0.32);
+    box-shadow: 0 4px 16px -6px hsl(var(--primary) / 0.22);
+}
+/* Avatar/photo card stays clean so the image / initials read well */
+.lp-dashboard .lp-card--photo {
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+}
+
 .lp-dashboard .lp-card--span2 { grid-column: span 2; }
 .lp-dashboard .lp-card--span3 { grid-column: span 3; }
 .lp-dashboard .lp-card--photo {
