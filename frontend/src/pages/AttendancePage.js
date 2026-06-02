@@ -271,10 +271,10 @@ export default function AttendancePage() {
                                             data-testid={`attendance-row-${student.id}`}
                                         >
                                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                                                {student.first_name?.[0]}{student.last_name?.[0]}
+                                                {student.last_name?.[0]}{student.first_name?.[0]}
                                             </div>
                                             <div className="flex-1">
-                                                <p className="font-semibold">{student.first_name} {student.last_name}</p>
+                                                <p className="font-semibold">{student.last_name}, {student.first_name}{student.middle_name ? ` ${student.middle_name}` : ''}</p>
                                                 <p className="text-sm text-muted-foreground">Grade {student.grade_level}</p>
                                             </div>
                                             <div className="flex gap-2">
