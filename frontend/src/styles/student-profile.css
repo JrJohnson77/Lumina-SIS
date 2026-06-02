@@ -283,15 +283,17 @@
 
 /* ============== CARD STYLES ============== */
 .lp-card {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
+    background: hsl(var(--primary) / 0.045);
+    border: 1px solid hsl(var(--primary) / 0.18);
     border-radius: 14px;
     padding: 18px 20px;
     position: relative;
-    transition: box-shadow .2s, border-color .2s;
+    transition: box-shadow .2s, border-color .2s, background .2s;
 }
 .lp-card:hover {
-    box-shadow: 0 2px 10px -4px hsl(215 50% 20% / 0.08);
+    background: hsl(var(--primary) / 0.07);
+    border-color: hsl(var(--primary) / 0.32);
+    box-shadow: 0 4px 16px -6px hsl(var(--primary) / 0.22);
 }
 .lp-card__header {
     display: flex;
@@ -345,21 +347,19 @@
     gap: 16px;
 }
 
-/* Light primary-blue hue on dashboard tiles only (Student + Staff profile dashboards).
-   Hovering deepens the hue and lifts the card. */
-.lp-dashboard .lp-card {
-    background: hsl(var(--primary) / 0.045);
-    border-color: hsl(var(--primary) / 0.18);
-}
-.lp-dashboard .lp-card:hover {
-    background: hsl(var(--primary) / 0.07);
-    border-color: hsl(var(--primary) / 0.32);
-    box-shadow: 0 4px 16px -6px hsl(var(--primary) / 0.22);
-}
-/* Avatar/photo card stays clean so the image / initials read well */
-.lp-dashboard .lp-card--photo {
+/* Light primary-blue hue is the default for .lp-card (see above).
+   The avatar/photo card opts back to a clean white background so
+   headshots and initials read clearly. */
+.lp-dashboard .lp-card--photo,
+.lp-card--photo {
     background: hsl(var(--card));
     border-color: hsl(var(--border));
+}
+.lp-dashboard .lp-card--photo:hover,
+.lp-card--photo:hover {
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+    box-shadow: 0 4px 14px -6px hsl(215 50% 20% / 0.12);
 }
 
 .lp-dashboard .lp-card--span2 { grid-column: span 2; }
@@ -465,7 +465,7 @@
     border-radius: 10px;
     transition: background .15s;
 }
-.lp-family__row:hover { background: hsl(var(--muted)); }
+.lp-family__row:hover { background: hsl(var(--primary) / 0.08); }
 .lp-family__name { color: hsl(var(--primary)); font-weight: 600; font-size: 13.5px; }
 .lp-family__rel {
     color: hsl(var(--muted-foreground));
