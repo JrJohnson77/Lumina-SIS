@@ -1106,8 +1106,8 @@ export default function ReportsPage() {
 
                 {/* Selection Controls */}
                 <Card className="mt-6 rounded-2xl border-border shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <CardContent className="p-6 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="space-y-2">
                                 <Label>Select Class *</Label>
                                 <Select value={selectedClass} onValueChange={setSelectedClass}>
@@ -1155,12 +1155,14 @@ export default function ReportsPage() {
                                     </Select>
                                 </div>
                             )}
-                            
-                            <div className="flex items-end gap-2">
-                                <Button
+                        </div>
+
+                        {/* Action buttons — wrap to next line on narrow viewports so the toolbar never scrolls horizontally */}
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40">
+                            <Button
                                     onClick={activeTab === 'term-reports' ? generateTermReports : fetchClassData}
                                     disabled={!selectedClass || generating}
-                                    className="rounded-full flex-1"
+                                    className="rounded-full"
                                     data-testid="generate-report-btn"
                                 >
                                     {generating ? (
@@ -1237,7 +1239,6 @@ export default function ReportsPage() {
                                         )}
                                     </>
                                 )}
-                            </div>
                         </div>
                     </CardContent>
                 </Card>
