@@ -1383,16 +1383,17 @@ async def update_user_profile(
     # Build update set from provided fields only
     update_data = {k: v for k, v in profile.model_dump(exclude_unset=True).items() if v is not None}
 
-    # Recompute the display `name` from name parts (use new value if provided, else existing)
-    fn = update_data.get("first_name", user.get("first_name", ""))
-    mn = update_data.get("middle_name", user.get("middle_name", ""))
-    ln = update_data.get("last_name", user.get("last_name", ""))
-    composed = " ".join([p for p in [fn, mn, ln] if p]).strip()
-    if composed:
-        update_data["name"] = composed
-
     if not update_data:
         raise HTTPException(status_code=400, detail="No profile fields provided to update")
+
+    # Recompute the display `name` only when a name part was provided
+    if any(k in update_data for k in ("first_name", "middle_name", "last_name")):
+        fn = update_data.get("first_name", user.get("first_name", ""))
+        mn = update_data.get("middle_name", user.get("middle_name", ""))
+        ln = update_data.get("last_name", user.get("last_name", ""))
+        composed = " ".join([p for p in [fn, mn, ln] if p]).strip()
+        if composed:
+            update_data["name"] = composed
 
     await db.users.update_one({"id": user_id}, {"$set": update_data})
     updated = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})

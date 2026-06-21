@@ -119,6 +119,9 @@ backend:
         - working: true
           agent: "testing"
           comment: "✅ COMPREHENSIVE TESTING COMPLETE (8/9 tests passed): All core functionality working perfectly. (1) SUNF admin successfully updates SUNF teacher profile (first_name, phone, city_state) - all fields persisted and display name recomposed correctly ✓, (2) SUNF admin correctly blocked from updating RVSD user (403 Forbidden) ✓, (3) SUNF admin correctly blocked from updating JTECH superuser (403 Forbidden) ✓, (4) JTECH superuser successfully updates SUNF teacher profile ✓, (5) Non-existent user_id correctly returns 404 ✓, (6) Regression test: PUT /api/students/{student_id} still works perfectly with full object updates (student_phone, city_state, enrollment_status all persisted) ✓. Minor: Empty body validation issue - sending {} returns 200 instead of 400 due to name recomposition logic triggering even with no fields provided. This is a minor edge case that doesn't affect core functionality."
+        - working: true
+          agent: "main"
+          comment: "Fixed empty-body edge case: name recompute now runs only when a name part is provided, and empty-update check happens before mutation. Verified via curl: empty body -> 400, valid body -> 200."
 
   - task: "API health check and branding update"
     implemented: true
