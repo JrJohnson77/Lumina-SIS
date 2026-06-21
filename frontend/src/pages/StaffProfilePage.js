@@ -14,6 +14,10 @@ import {
     Key,
     BadgeCheck,
     Loader2,
+    ChevronRight,
+    Pencil,
+    Save,
+    X,
 } from 'lucide-react';
 import '../styles/student-profile.css';
 
@@ -22,6 +26,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const ROLE_OPTIONS = ['All Staff', 'Admin', 'Teacher', 'Superuser'];
 const STAFF_TABS = [
     { key: 'dashboard', label: 'Dashboard' },
+    { key: 'profile',   label: 'Profile' },
     { key: 'contact',   label: 'Contact' },
     { key: 'login',     label: 'Login Management' },
 ];
@@ -137,9 +142,12 @@ export default function StaffProfilePage() {
 
     const renderActiveTab = () => {
         if (!staff) return null;
-        if (activeTab === 'dashboard') return <StaffDashboardTab staff={staff} initials={initials} />;
-        if (activeTab === 'contact')   return <StaffContactTab staff={staff} />;
-        if (activeTab === 'login')     return <StaffLoginTab staff={staff} me={me} onReload={() => loadStaff(staff.id)} />;
+        const canEdit = isAdmin && (me?.role === 'superuser' || staff.role !== 'superuser');
+        const reload = () => loadStaff(staff.id);
+        if (activeTab === 'dashboard') return <StaffDashboardTab staff={staff} initials={initials} onCardClick={onTabChange} />;
+        if (activeTab === 'profile')   return <StaffProfileTab staff={staff} canEdit={canEdit} onReload={reload} />;
+        if (activeTab === 'contact')   return <StaffContactTab staff={staff} canEdit={canEdit} onReload={reload} />;
+        if (activeTab === 'login')     return <StaffLoginTab staff={staff} me={me} onReload={reload} />;
         return null;
     };
 
@@ -272,7 +280,14 @@ export default function StaffProfilePage() {
 
 // ─── Tabs ─────────────────────────────────────────────────────────
 
-function StaffDashboardTab({ staff, initials }) {
+function StaffDashboardTab({ staff, initials, onCardClick }) {
+    const cardProps = (key, extraClass = '') => onCardClick
+        ? { onClick: () => onCardClick(key), className: `lp-card lp-card--clickable ${extraClass}`.trim(), role: 'button', tabIndex: 0,
+            onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCardClick(key); } } }
+        : { className: `lp-card ${extraClass}`.trim() };
+    const openHint = onCardClick
+        ? <span className="lp-card__open-hint" aria-hidden="true">Open <ChevronRight size={12} /></span>
+        : null;
     return (
         <div className="lp-dashboard">
             {/* Avatar card (left col, spans 2 rows) */}
@@ -302,8 +317,8 @@ function StaffDashboardTab({ staff, initials }) {
             </div>
 
             {/* Identity (row 1, spans 2 cols) */}
-            <div className="lp-card lp-card--span2" data-testid="staff-card-identity">
-                <div className="lp-card__header"><h3 className="lp-card__title"><UserIcon />Identity</h3></div>
+            <div {...cardProps('profile', 'lp-card--span2')} data-testid="staff-card-identity">
+                <div className="lp-card__header"><h3 className="lp-card__title"><UserIcon />Identity</h3>{openHint}</div>
                 <div className="lp-kv">
                     <span className="lp-kv__k">Full Name</span>
                     <span className="lp-kv__v">{[staff.first_name, staff.middle_name, staff.last_name].filter(Boolean).join(' ') || staff.name || '—'}</span>
@@ -336,12 +351,12 @@ function StaffDashboardTab({ staff, initials }) {
             </div>
 
             {/* Row 2 right: Contact summary */}
-            <div className="lp-card" data-testid="staff-card-contact-summary">
-                <div className="lp-card__header"><h3 className="lp-card__title"><Mail />Contact</h3></div>
+            <div {...cardProps('contact')} data-testid="staff-card-contact-summary">
+                <div className="lp-card__header"><h3 className="lp-card__title"><Mail />Contact</h3>{openHint}</div>
                 <div className="lp-kv">
                     <span className="lp-kv__k">Email</span>
                     <span className="lp-kv__v">
-                        {staff.email ? <a href={`mailto:${staff.email}`}>{staff.email}</a> : <span className="lp-muted">—</span>}
+                        {staff.email ? <a href={`mailto:${staff.email}`} onClick={(e) => e.stopPropagation()}>{staff.email}</a> : <span className="lp-muted">—</span>}
                     </span>
                     <span className="lp-kv__k">Phone</span>
                     <span className="lp-kv__v">{staff.phone || '—'}</span>
@@ -369,12 +384,94 @@ function StaffDashboardTab({ staff, initials }) {
     );
 }
 
-function StaffContactTab({ staff }) {
+function StaffContactTab({ staff, canEdit, onReload }) {
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [form, setForm] = useState({});
+
+    const initForm = () => ({
+        email: staff.email || '',
+        phone: staff.phone || '',
+        address_line1: staff.address_line1 || '',
+        address_line2: staff.address_line2 || '',
+        city_state: staff.city_state || '',
+        country: staff.country || '',
+    });
+
+    useEffect(() => { setForm(initForm()); setEditing(false);  }, [staff.id]);
+
+    const startEdit = () => { setForm(initForm()); setEditing(true); };
+    const handleChange = (key, value) => setForm((p) => ({ ...p, [key]: value }));
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await axios.put(`${API}/users/${staff.id}`, form);
+            toast.success('Contact information updated');
+            setEditing(false);
+            onReload?.();
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Failed to update contact');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const address = [staff.address_line1, staff.address_line2, staff.city_state, staff.country].filter(Boolean).join(', ') || '—';
+
+    if (editing) {
+        return (
+            <div className="lp-card" data-testid="staff-contact-edit-card">
+                <div className="lp-card__header"><h3 className="lp-card__title"><Mail />Edit Contact</h3></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div className="lp-field">
+                        <label className="lp-field__label">Email</label>
+                        <input className="lp-input" type="email" value={form.email || ''} onChange={(e) => handleChange('email', e.target.value)} data-testid="staff-contact-input-email" />
+                    </div>
+                    <div className="lp-field">
+                        <label className="lp-field__label">Phone</label>
+                        <input className="lp-input" value={form.phone || ''} onChange={(e) => handleChange('phone', e.target.value)} data-testid="staff-contact-input-phone" />
+                    </div>
+                    <div className="lp-field" style={{ gridColumn: '1 / -1' }}>
+                        <label className="lp-field__label">Address Line 1</label>
+                        <input className="lp-input" value={form.address_line1 || ''} onChange={(e) => handleChange('address_line1', e.target.value)} data-testid="staff-contact-input-address1" />
+                    </div>
+                    <div className="lp-field" style={{ gridColumn: '1 / -1' }}>
+                        <label className="lp-field__label">Address Line 2</label>
+                        <input className="lp-input" value={form.address_line2 || ''} onChange={(e) => handleChange('address_line2', e.target.value)} data-testid="staff-contact-input-address2" />
+                    </div>
+                    <div className="lp-field">
+                        <label className="lp-field__label">City / State</label>
+                        <input className="lp-input" value={form.city_state || ''} onChange={(e) => handleChange('city_state', e.target.value)} data-testid="staff-contact-input-city" />
+                    </div>
+                    <div className="lp-field">
+                        <label className="lp-field__label">Country</label>
+                        <input className="lp-input" value={form.country || ''} onChange={(e) => handleChange('country', e.target.value)} data-testid="staff-contact-input-country" />
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                    <button type="button" className="lp-btn lp-btn--primary" onClick={handleSave} disabled={saving} data-testid="staff-contact-save-btn">
+                        <Save size={13} /> {saving ? 'Saving…' : 'Save Changes'}
+                    </button>
+                    <button type="button" className="lp-btn lp-btn--outline" onClick={() => setEditing(false)} disabled={saving} data-testid="staff-contact-cancel-btn">
+                        <X size={13} /> Cancel
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <>
             <div className="lp-card" style={{ marginBottom: 16 }} data-testid="staff-contact-card">
-                <div className="lp-card__header"><h3 className="lp-card__title"><Mail />Email &amp; Phones</h3></div>
+                <div className="lp-card__header">
+                    <h3 className="lp-card__title"><Mail />Email &amp; Phones</h3>
+                    {canEdit && (
+                        <button type="button" className="lp-btn lp-btn--outline lp-btn--sm" onClick={startEdit} data-testid="staff-contact-edit-btn">
+                            <Pencil size={12} /> Edit
+                        </button>
+                    )}
+                </div>
                 <div className="lp-kv">
                     <span className="lp-kv__k"><Mail size={11} style={{ display: 'inline', marginRight: 4 }} />Email</span>
                     <span className="lp-kv__v">
@@ -396,6 +493,112 @@ function StaffContactTab({ staff }) {
                 </div>
             </div>
         </>
+    );
+}
+
+function StaffProfileTab({ staff, canEdit, onReload }) {
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [form, setForm] = useState({});
+
+    const initForm = () => ({
+        salutation: staff.salutation || '',
+        first_name: staff.first_name || '',
+        middle_name: staff.middle_name || '',
+        last_name: staff.last_name || '',
+        gender: staff.gender || '',
+    });
+
+    useEffect(() => { setForm(initForm()); setEditing(false);  }, [staff.id]);
+
+    const startEdit = () => { setForm(initForm()); setEditing(true); };
+    const handleChange = (key, value) => setForm((p) => ({ ...p, [key]: value }));
+
+    const handleSave = async () => {
+        if (!form.first_name?.trim() || !form.last_name?.trim()) {
+            toast.error('First and last name are required');
+            return;
+        }
+        setSaving(true);
+        try {
+            await axios.put(`${API}/users/${staff.id}`, form);
+            toast.success('Profile updated');
+            setEditing(false);
+            onReload?.();
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Failed to update profile');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const fullName = [staff.first_name, staff.middle_name, staff.last_name].filter(Boolean).join(' ') || staff.name || '—';
+
+    if (editing) {
+        return (
+            <div className="lp-card" data-testid="staff-profile-edit-card">
+                <div className="lp-card__header"><h3 className="lp-card__title"><UserIcon />Edit Profile</h3></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div className="lp-field">
+                        <label className="lp-field__label">Salutation</label>
+                        <select className="lp-select" value={form.salutation || ''} onChange={(e) => handleChange('salutation', e.target.value)} data-testid="staff-profile-input-salutation">
+                            {['', 'Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.'].map((s) => <option key={s} value={s}>{s || 'Select…'}</option>)}
+                        </select>
+                    </div>
+                    <div className="lp-field">
+                        <label className="lp-field__label">Gender</label>
+                        <select className="lp-select" value={form.gender || ''} onChange={(e) => handleChange('gender', e.target.value)} data-testid="staff-profile-input-gender">
+                            {['', 'Male', 'Female', 'Other'].map((g) => <option key={g} value={g}>{g || 'Select…'}</option>)}
+                        </select>
+                    </div>
+                    <div className="lp-field">
+                        <label className="lp-field__label">First Name *</label>
+                        <input className="lp-input" value={form.first_name || ''} onChange={(e) => handleChange('first_name', e.target.value)} data-testid="staff-profile-input-first_name" />
+                    </div>
+                    <div className="lp-field">
+                        <label className="lp-field__label">Middle Name</label>
+                        <input className="lp-input" value={form.middle_name || ''} onChange={(e) => handleChange('middle_name', e.target.value)} data-testid="staff-profile-input-middle_name" />
+                    </div>
+                    <div className="lp-field">
+                        <label className="lp-field__label">Last Name *</label>
+                        <input className="lp-input" value={form.last_name || ''} onChange={(e) => handleChange('last_name', e.target.value)} data-testid="staff-profile-input-last_name" />
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                    <button type="button" className="lp-btn lp-btn--primary" onClick={handleSave} disabled={saving} data-testid="staff-profile-save-btn">
+                        <Save size={13} /> {saving ? 'Saving…' : 'Save Changes'}
+                    </button>
+                    <button type="button" className="lp-btn lp-btn--outline" onClick={() => setEditing(false)} disabled={saving} data-testid="staff-profile-cancel-btn">
+                        <X size={13} /> Cancel
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="lp-card" data-testid="staff-profile-card">
+            <div className="lp-card__header">
+                <h3 className="lp-card__title"><UserIcon />Identity</h3>
+                {canEdit && (
+                    <button type="button" className="lp-btn lp-btn--outline lp-btn--sm" onClick={startEdit} data-testid="staff-profile-edit-btn">
+                        <Pencil size={12} /> Edit
+                    </button>
+                )}
+            </div>
+            <div className="lp-kv">
+                <span className="lp-kv__k">Full Name</span>
+                <span className="lp-kv__v">{fullName}</span>
+                <span className="lp-kv__k">Salutation</span>
+                <span className="lp-kv__v">{staff.salutation || '—'}</span>
+                <span className="lp-kv__k">Gender</span>
+                <span className="lp-kv__v">{staff.gender || '—'}</span>
+                <span className="lp-kv__k">Role</span>
+                <span className="lp-kv__v"><span className="lp-badge lp-badge--info">{staff.role}</span></span>
+                <span className="lp-kv__k">School</span>
+                <span className="lp-kv__v">{staff.school_code}</span>
+            </div>
+        </div>
     );
 }
 
@@ -491,7 +694,7 @@ function StaffLoginTab({ staff, me, onReload }) {
             ) : (
                 <div className="lp-empty">
                     <h4>Read-only</h4>
-                    <p>Only superusers can modify a superuser's credentials.</p>
+                    <p>Only superusers can modify a superuser&apos;s credentials.</p>
                 </div>
             )}
         </>

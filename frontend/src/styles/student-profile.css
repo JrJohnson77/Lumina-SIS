@@ -339,6 +339,37 @@
 .lp-card__link:hover { background: hsl(var(--primary) / 0.08); }
 .lp-card__link svg { width: 12px; height: 12px; }
 
+/* Clickable dashboard cards → open matching right-panel tab */
+.lp-card--clickable {
+    cursor: pointer;
+}
+.lp-card--clickable:hover {
+    border-color: hsl(var(--primary) / 0.45);
+    box-shadow: 0 6px 20px -6px hsl(var(--primary) / 0.30);
+}
+.lp-card--clickable:focus-visible {
+    outline: 2px solid hsl(var(--primary) / 0.6);
+    outline-offset: 2px;
+}
+.lp-card__open-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: hsl(var(--primary));
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0;
+    transition: opacity .15s;
+}
+.lp-card--clickable:hover .lp-card__open-hint,
+.lp-card--clickable:focus-visible .lp-card__open-hint {
+    opacity: 1;
+}
+.lp-card__open-hint svg { width: 12px; height: 12px; }
+
+
 /* Dashboard grid: photo (left, span 2 rows) | content cards
    3-col grid prevents narrow single-col cards from forcing text to wrap character-by-character. */
 .lp-dashboard {

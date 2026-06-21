@@ -1346,6 +1346,59 @@ async def reset_user_credentials(
     
     return {"message": "Credentials updated successfully"}
 
+class UserProfileUpdate(BaseModel):
+    salutation: Optional[str] = None
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
+    gender: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city_state: Optional[str] = None
+    country: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+@api_router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user_profile(
+    user_id: str,
+    profile: UserProfileUpdate,
+    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN]))
+):
+    """Update a staff member's profile fields (name, contact, address).
+    Admin can edit users in their own school; Superuser can edit anyone.
+    Only a superuser may edit a superuser's profile."""
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Admins can only edit users in their own school
+    if current_user["role"] != UserRole.SUPERUSER and user.get("school_code") != current_user["school_code"]:
+        raise HTTPException(status_code=403, detail="Cannot modify users from other schools")
+
+    # Only a superuser can edit a superuser
+    if user.get("role") == UserRole.SUPERUSER and current_user["role"] != UserRole.SUPERUSER:
+        raise HTTPException(status_code=403, detail="Only superuser can modify a superuser's profile")
+
+    # Build update set from provided fields only
+    update_data = {k: v for k, v in profile.model_dump(exclude_unset=True).items() if v is not None}
+
+    # Recompute the display `name` from name parts (use new value if provided, else existing)
+    fn = update_data.get("first_name", user.get("first_name", ""))
+    mn = update_data.get("middle_name", user.get("middle_name", ""))
+    ln = update_data.get("last_name", user.get("last_name", ""))
+    composed = " ".join([p for p in [fn, mn, ln] if p]).strip()
+    if composed:
+        update_data["name"] = composed
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No profile fields provided to update")
+
+    await db.users.update_one({"id": user_id}, {"$set": update_data})
+    updated = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    await write_audit(current_user, "update", "user", user_id, updated.get("name", updated.get("username", "")))
+    return UserResponse(**updated)
+
 # ==================== STUDENT ROUTES ====================
 
 @api_router.post("/students", response_model=StudentResponse)

@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import {
     Home, Phone, Smartphone, Mail, GraduationCap, School,
-    Users, Plus, ExternalLink, User,
+    Users, Plus, ExternalLink, User, ChevronRight,
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -75,7 +75,7 @@ const Donut = ({ values, size = 100, thickness = 18 }) => {
     );
 };
 
-export default function DashboardTab({ student, classMap }) {
+export default function DashboardTab({ student, classMap, onCardClick }) {
     const [attendance, setAttendance] = useState({ present: 0, absent: 0, late: 0, excused: 0, total: 0, percent_present: 0 });
     const [loadingAtt, setLoadingAtt] = useState(true);
     const [homeroomTeacher, setHomeroomTeacher] = useState('');
@@ -129,6 +129,14 @@ export default function DashboardTab({ student, classMap }) {
         { key: 'absent', value: attendance.absent, color: '#C62828' },
     ];
 
+    const cardProps = (key, extraClass = '') => onCardClick
+        ? { onClick: () => onCardClick(key), className: `lp-card lp-card--clickable ${extraClass}`.trim(), role: 'button', tabIndex: 0,
+            onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCardClick(key); } } }
+        : { className: `lp-card ${extraClass}`.trim() };
+    const openHint = onCardClick
+        ? <span className="lp-card__open-hint" aria-hidden="true">Open <ChevronRight size={12} /></span>
+        : null;
+
     return (
         <>
             <div className="lp-dashboard">
@@ -144,9 +152,10 @@ export default function DashboardTab({ student, classMap }) {
                 </div>
 
                 {/* === Contact === */}
-                <div className="lp-card lp-card--span2" data-testid="card-contact">
+                <div {...cardProps('contact', 'lp-card--span2')} data-testid="card-contact">
                     <div className="lp-card__header">
                         <h3 className="lp-card__title"><Home />Contact</h3>
+                        {openHint}
                     </div>
                     <div className="lp-kv">
                         <span className="lp-kv__k">Address</span>
@@ -158,16 +167,17 @@ export default function DashboardTab({ student, classMap }) {
                         <span className="lp-kv__k"><Mail size={11} style={{ display: 'inline', marginRight: 4 }} />Email</span>
                         <span className="lp-kv__v">
                             {student.student_email
-                                ? <a href={`mailto:${student.student_email}`}>{student.student_email}</a>
+                                ? <a href={`mailto:${student.student_email}`} onClick={(e) => e.stopPropagation()}>{student.student_email}</a>
                                 : <span className="lp-muted">—</span>}
                         </span>
                     </div>
                 </div>
 
                 {/* === School Information === */}
-                <div className="lp-card" data-testid="card-school-info">
+                <div {...cardProps('school')} data-testid="card-school-info">
                     <div className="lp-card__header">
                         <h3 className="lp-card__title"><School />School Information</h3>
+                        {openHint}
                     </div>
                     <div className="lp-kv">
                         <span className="lp-kv__k">Status</span>
@@ -188,9 +198,10 @@ export default function DashboardTab({ student, classMap }) {
                 </div>
 
                 {/* === Student Information === */}
-                <div className="lp-card" data-testid="card-student-info">
+                <div {...cardProps('profile')} data-testid="card-student-info">
                     <div className="lp-card__header">
                         <h3 className="lp-card__title"><GraduationCap />Student Information</h3>
+                        {openHint}
                     </div>
                     <div className="lp-kv">
                         <span className="lp-kv__k">DOB</span>
@@ -205,10 +216,10 @@ export default function DashboardTab({ student, classMap }) {
                 </div>
 
                 {/* === Attendance – Year === */}
-                <div className="lp-card lp-card--span3" data-testid="card-attendance-year">
+                <div {...cardProps('attendance', 'lp-card--span3')} data-testid="card-attendance-year">
                     <div className="lp-card__header">
                         <h3 className="lp-card__title">Attendance — Year</h3>
-                        <Link to="/attendance" className="lp-card__link">
+                        <Link to="/attendance" className="lp-card__link" onClick={(e) => e.stopPropagation()}>
                             Report <ExternalLink size={12} />
                         </Link>
                     </div>
@@ -241,10 +252,10 @@ export default function DashboardTab({ student, classMap }) {
                 </div>
 
                 {/* === Family === */}
-                <div className="lp-card lp-card--span3" data-testid="card-family">
+                <div {...cardProps('family', 'lp-card--span3')} data-testid="card-family">
                     <div className="lp-card__header">
                         <h3 className="lp-card__title"><Users />Family</h3>
-                        <Link to="/students" className="lp-btn lp-btn--outline lp-btn--sm">
+                        <Link to="/students" className="lp-btn lp-btn--outline lp-btn--sm" onClick={(e) => e.stopPropagation()}>
                             <Plus size={12} /> Add Family
                         </Link>
                     </div>

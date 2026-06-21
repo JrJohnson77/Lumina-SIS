@@ -20,6 +20,9 @@ import FamilyTab from '../components/student-profile/FamilyTab';
 import MedicalTab from '../components/student-profile/MedicalTab';
 import BehaviorTab from '../components/student-profile/BehaviorTab';
 import EmptyTab from '../components/student-profile/EmptyTab';
+import ContactTab from '../components/student-profile/ContactTab';
+import ProfileTab from '../components/student-profile/ProfileTab';
+import SchoolTab from '../components/student-profile/SchoolTab';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -66,6 +69,8 @@ const compareByKey = (keyFn) => (a, b) => {
 
 const TABS = [
     { key: 'dashboard',  label: 'Dashboard' },
+    { key: 'profile',    label: 'Student Info' },
+    { key: 'contact',    label: 'Contact' },
     { key: 'academics',  label: 'Academics' },
     { key: 'alerts',     label: 'Alerts' },
     { key: 'attendance', label: 'Attendance' },
@@ -255,9 +260,12 @@ export default function StudentProfilePage() {
 
     const renderActiveTab = () => {
         if (!student) return null;
-        const props = { student, classMap, onReload: () => loadStudent(student.id) };
+        const props = { student, classMap, onReload: () => loadStudent(student.id), canEdit: isAdmin };
         switch (activeTab) {
-            case 'dashboard':  return <DashboardTab {...props} />;
+            case 'dashboard':  return <DashboardTab {...props} onCardClick={onTabChange} />;
+            case 'profile':    return <ProfileTab {...props} />;
+            case 'contact':    return <ContactTab {...props} />;
+            case 'school':     return <SchoolTab {...props} />;
             case 'academics':  return <AcademicsTab {...props} />;
             case 'attendance': return <AttendanceTab {...props} />;
             case 'family':     return <FamilyTab {...props} />;
@@ -267,8 +275,7 @@ export default function StudentProfilePage() {
             case 'interests':  return <EmptyTab tabLabel="Interests" comingSoon />;
             case 'login':      return <EmptyTab tabLabel="Login Management" comingSoon />;
             case 'schedule':   return <EmptyTab tabLabel="Schedule" comingSoon />;
-            case 'school':     return <EmptyTab tabLabel="School" comingSoon />;
-            default:           return <DashboardTab {...props} />;
+            default:           return <DashboardTab {...props} onCardClick={onTabChange} />;
         }
     };
 

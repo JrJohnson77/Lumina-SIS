@@ -1,27 +1,34 @@
 #!/usr/bin/env python3
 """
 Backend API Testing for Lumina-SIS
-Tests all key endpoints with focus on report template dynamic weight keys
+Tests PUT /api/users/{user_id} endpoint and regression tests for PUT /api/students/{student_id}
 """
 
 import requests
 import json
 import sys
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # API base URL from frontend configuration
-BASE_URL = "https://repo-refresh-18.preview.emergentagent.com/api"
+BASE_URL = "https://04417830-d685-4813-ab21-60129e85077b.preview.emergentagent.com/api"
 
 # Test credentials
-TEST_CREDENTIALS = {
+SUNF_ADMIN = {
+    "school_code": "SUNF",
+    "username": "admin",
+    "password": "Admin@123"
+}
+
+JTECH_SUPERUSER = {
     "school_code": "JTECH",
-    "username": "jtech.innovations@outlook.com", 
+    "username": "jtech.innovations@outlook.com",
     "password": "Xekleidoma@1"
 }
 
 class APITester:
     def __init__(self):
-        self.access_token = None
+        self.sunf_token = None
+        self.jtech_token = None
         self.test_results = []
         
     def log_test(self, test_name: str, success: bool, message: str, response_data: Any = None):
@@ -40,306 +47,556 @@ class APITester:
         if not success:
             print(f"   Details: {response_data}")
     
-    def test_health_endpoint(self):
-        """Test the health endpoint"""
+    def login(self, credentials: Dict[str, str]) -> Optional[str]:
+        """Login and get access token"""
         try:
-            response = requests.get(f"{BASE_URL}/health", timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("status") == "healthy":
-                    self.log_test("Health Check", True, "API is healthy")
-                else:
-                    self.log_test("Health Check", False, f"Unexpected response: {data}")
-            else:
-                self.log_test("Health Check", False, f"Status code {response.status_code}")
-                
-        except Exception as e:
-            self.log_test("Health Check", False, f"Exception: {str(e)}")
-    
-    def test_login(self):
-        """Test login and get access token"""
-        try:
-            response = requests.post(f"{BASE_URL}/auth/login", json=TEST_CREDENTIALS, timeout=10)
+            response = requests.post(f"{BASE_URL}/auth/login", json=credentials, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
                 if "access_token" in data:
-                    self.access_token = data["access_token"]
-                    self.log_test("Login", True, "Login successful, token received")
-                    return True
+                    return data["access_token"]
                 else:
-                    self.log_test("Login", False, "No access token in response", data)
-                    return False
-            else:
-                self.log_test("Login", False, f"Status code {response.status_code}", response.text)
-                return False
-                
-        except Exception as e:
-            self.log_test("Login", False, f"Exception: {str(e)}")
-            return False
-
-    def test_report_template_get(self):
-        """Test GET report template endpoint"""
-        try:
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            response = requests.get(f"{BASE_URL}/report-templates/JTECH", headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                template_data = response.json()
-                
-                # Check if assessment_weights exists
-                if "assessment_weights" in template_data:
-                    weights = template_data["assessment_weights"]
-                    self.log_test("GET Report Template", True, 
-                                f"Template retrieved with assessment_weights: {json.dumps(weights)}")
-                    return template_data
-                else:
-                    self.log_test("GET Report Template", False, "Template missing assessment_weights object")
+                    print(f"❌ No access token in response for {credentials['username']}")
                     return None
             else:
-                self.log_test("GET Report Template", False, 
-                            f"Failed with status {response.status_code}", response.text)
+                print(f"❌ Login failed for {credentials['username']}: {response.status_code} - {response.text}")
                 return None
                 
         except Exception as e:
-            self.log_test("GET Report Template", False, f"Exception occurred: {str(e)}")
+            print(f"❌ Login exception for {credentials['username']}: {str(e)}")
             return None
-    
-    def test_report_template_update_custom_weights(self, current_template):
-        """Test PUT report template with custom dynamic weight keys"""
-        try:
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            
-            # Custom assessment weights with NEW dynamic keys + required fields
-            custom_update = {
-                "school_code": "JTECH",
-                "school_name": current_template.get("school_name", "JTECH Academy"),
-                "assessment_weights": {
-                    "homework": 10,
-                    "classwork": 15,
-                    "midTermExam": 35,
-                    "finalExam": 40
-                },
-                "use_weighted_grading": True
-            }
-            
-            print(f"   Sending custom update with required fields...")
-            
-            response = requests.put(f"{BASE_URL}/report-templates/JTECH", 
-                                  headers=headers, json=custom_update, timeout=10)
-            
-            if response.status_code == 200:
-                updated_template = response.json()
-                
-                # Verify the new weights were saved
-                if "assessment_weights" in updated_template:
-                    saved_weights = updated_template["assessment_weights"]
-                    
-                    # Check if all custom keys are present
-                    expected_keys = ["homework", "classwork", "midTermExam", "finalExam"]
-                    missing_keys = [key for key in expected_keys if key not in saved_weights]
-                    
-                    if not missing_keys:
-                        self.log_test("PUT Report Template - Custom Weights", True,
-                                    f"Updated with custom weights: {json.dumps(saved_weights)}")
-                        return True
-                    else:
-                        self.log_test("PUT Report Template - Custom Weights", False,
-                                    f"Missing custom keys: {missing_keys}")
-                        return False
-                else:
-                    self.log_test("PUT Report Template - Custom Weights", False,
-                                "Updated template missing assessment_weights")
-                    return False
-            else:
-                self.log_test("PUT Report Template - Custom Weights", False,
-                            f"Failed with status {response.status_code}", response.text)
-                return False
-                
-        except Exception as e:
-            self.log_test("PUT Report Template - Custom Weights", False, f"Exception occurred: {str(e)}")
-            return False
-    
-    def test_report_template_verify_persistence(self):
-        """Test that custom weights persist by getting template again"""
-        try:
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            response = requests.get(f"{BASE_URL}/report-templates/JTECH", headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                template_data = response.json()
-                
-                if "assessment_weights" in template_data:
-                    saved_weights = template_data["assessment_weights"]
-                    
-                    # Check for the custom keys we set
-                    expected_custom_weights = {
-                        "homework": 10,
-                        "classwork": 15,
-                        "midTermExam": 35,
-                        "finalExam": 40
-                    }
-                    
-                    # Verify each custom key and value
-                    all_correct = True
-                    missing_or_wrong = []
-                    for key, expected_value in expected_custom_weights.items():
-                        if key not in saved_weights:
-                            all_correct = False
-                            missing_or_wrong.append(f"{key} (missing)")
-                        elif saved_weights[key] != expected_value:
-                            all_correct = False
-                            missing_or_wrong.append(f"{key} ({saved_weights[key]} != {expected_value})")
-                    
-                    if all_correct:
-                        self.log_test("Verify Custom Weights Persistence", True,
-                                    f"Custom weights persisted: {json.dumps(saved_weights)}")
-                        return True
-                    else:
-                        self.log_test("Verify Custom Weights Persistence", False,
-                                    f"Issues: {', '.join(missing_or_wrong)} in {json.dumps(saved_weights)}")
-                        return False
-                else:
-                    self.log_test("Verify Custom Weights Persistence", False,
-                                "Template missing assessment_weights")
-                    return False
-            else:
-                self.log_test("Verify Custom Weights Persistence", False,
-                            f"Failed with status {response.status_code}", response.text)
-                return False
-                
-        except Exception as e:
-            self.log_test("Verify Custom Weights Persistence", False, f"Exception occurred: {str(e)}")
-            return False
-    
-    def test_report_template_restore_original(self, current_template):
-        """Test restoring original weights"""
-        try:
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            
-            # Restore original weights + required fields
-            original_update = {
-                "school_code": "JTECH",
-                "school_name": current_template.get("school_name", "JTECH Academy"),
-                "assessment_weights": {
-                    "homework": 5,
-                    "groupWork": 5,
-                    "project": 10,
-                    "quiz": 10,
-                    "midTerm": 30,
-                    "endOfTerm": 40
-                },
-                "use_weighted_grading": True
-            }
-            
-            print(f"   Restoring original weights with required fields...")
-            
-            response = requests.put(f"{BASE_URL}/report-templates/JTECH", 
-                                  headers=headers, json=original_update, timeout=10)
-            
-            if response.status_code == 200:
-                restored_template = response.json()
-                
-                if "assessment_weights" in restored_template:
-                    restored_weights = restored_template["assessment_weights"]
-                    
-                    # Verify restoration
-                    expected_original = original_update["assessment_weights"]
-                    all_restored = True
-                    missing_or_wrong = []
-                    
-                    for key, expected_value in expected_original.items():
-                        if key not in restored_weights:
-                            all_restored = False
-                            missing_or_wrong.append(f"{key} (missing)")
-                        elif restored_weights[key] != expected_value:
-                            all_restored = False
-                            missing_or_wrong.append(f"{key} ({restored_weights[key]} != {expected_value})")
-                    
-                    if all_restored:
-                        self.log_test("Restore Original Weights", True,
-                                    f"Original weights restored: {json.dumps(restored_weights)}")
-                        return True
-                    else:
-                        self.log_test("Restore Original Weights", False,
-                                    f"Issues: {', '.join(missing_or_wrong)} in {json.dumps(restored_weights)}")
-                        return False
-                else:
-                    self.log_test("Restore Original Weights", False,
-                                "Restored template missing assessment_weights")
-                    return False
-            else:
-                self.log_test("Restore Original Weights", False,
-                            f"Failed with status {response.status_code}", response.text)
-                return False
-                
-        except Exception as e:
-            self.log_test("Restore Original Weights", False, f"Exception occurred: {str(e)}")
-            return False
 
-    def run_focused_report_template_tests(self):
-        """Run focused test suite for report template endpoints"""
-        print("=== Lumina-SIS Report Template API Test Suite ===")
-        print("Testing dynamic weight keys functionality")
+    def test_setup_authentication(self):
+        """Setup: Authenticate both SUNF admin and JTECH superuser"""
+        print("=== SETUP: Authentication ===")
+        
+        print("1. Authenticating SUNF admin...")
+        self.sunf_token = self.login(SUNF_ADMIN)
+        if self.sunf_token:
+            self.log_test("SUNF Admin Login", True, "Successfully authenticated")
+        else:
+            self.log_test("SUNF Admin Login", False, "Failed to authenticate")
+            return False
+        
+        print("\n2. Authenticating JTECH superuser...")
+        self.jtech_token = self.login(JTECH_SUPERUSER)
+        if self.jtech_token:
+            self.log_test("JTECH Superuser Login", True, "Successfully authenticated")
+        else:
+            self.log_test("JTECH Superuser Login", False, "Failed to authenticate")
+            return False
+        
+        return True
+
+    def get_users(self, token: str, school_code: str) -> list:
+        """Get list of users for a school"""
+        try:
+            headers = {"Authorization": f"Bearer {token}"}
+            response = requests.get(f"{BASE_URL}/users", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                users = response.json()
+                return [u for u in users if u.get("school_code") == school_code]
+            else:
+                print(f"❌ Failed to get users: {response.status_code}")
+                return []
+        except Exception as e:
+            print(f"❌ Exception getting users: {str(e)}")
+            return []
+
+    def get_user_by_id(self, token: str, user_id: str) -> Optional[Dict]:
+        """Get a specific user by ID"""
+        try:
+            headers = {"Authorization": f"Bearer {token}"}
+            response = requests.get(f"{BASE_URL}/users/{user_id}", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+        except Exception as e:
+            print(f"❌ Exception getting user: {str(e)}")
+            return None
+
+    def test_scenario_1_sunf_admin_updates_teacher(self):
+        """Scenario 1: SUNF admin updates a SUNF teacher's profile"""
+        print("\n=== SCENARIO 1: SUNF Admin Updates SUNF Teacher ===")
+        
+        # Get SUNF teachers
+        print("Finding a SUNF teacher...")
+        sunf_users = self.get_users(self.sunf_token, "SUNF")
+        sunf_teachers = [u for u in sunf_users if u.get("role") == "teacher"]
+        
+        if not sunf_teachers:
+            self.log_test("Scenario 1 - Find Teacher", False, "No SUNF teachers found")
+            return
+        
+        teacher = sunf_teachers[0]
+        teacher_id = teacher["id"]
+        original_name = teacher.get("name", "")
+        print(f"   Selected teacher: {original_name} (ID: {teacher_id})")
+        
+        # Update teacher profile
+        update_data = {
+            "first_name": "UpdatedFirstName",
+            "phone": "+233-555-1234",
+            "city_state": "Accra, Greater Accra"
+        }
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.sunf_token}"}
+            response = requests.put(
+                f"{BASE_URL}/users/{teacher_id}",
+                headers=headers,
+                json=update_data,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                updated_user = response.json()
+                
+                # Verify fields were updated
+                checks = []
+                if updated_user.get("first_name") == "UpdatedFirstName":
+                    checks.append("first_name updated ✓")
+                else:
+                    checks.append(f"first_name NOT updated (got: {updated_user.get('first_name')})")
+                
+                if updated_user.get("phone") == "+233-555-1234":
+                    checks.append("phone updated ✓")
+                else:
+                    checks.append(f"phone NOT updated (got: {updated_user.get('phone')})")
+                
+                if updated_user.get("city_state") == "Accra, Greater Accra":
+                    checks.append("city_state updated ✓")
+                else:
+                    checks.append(f"city_state NOT updated (got: {updated_user.get('city_state')})")
+                
+                # Verify name recomposition
+                if "UpdatedFirstName" in updated_user.get("name", ""):
+                    checks.append("name recomposed ✓")
+                else:
+                    checks.append(f"name NOT recomposed (got: {updated_user.get('name')})")
+                
+                # Verify persistence by fetching again
+                persisted_user = self.get_user_by_id(self.sunf_token, teacher_id)
+                if persisted_user:
+                    if (persisted_user.get("first_name") == "UpdatedFirstName" and
+                        persisted_user.get("phone") == "+233-555-1234" and
+                        persisted_user.get("city_state") == "Accra, Greater Accra"):
+                        checks.append("persistence verified ✓")
+                    else:
+                        checks.append("persistence FAILED")
+                
+                all_passed = all("✓" in check for check in checks)
+                self.log_test(
+                    "Scenario 1 - SUNF Admin Updates Teacher",
+                    all_passed,
+                    f"Update response 200. Checks: {', '.join(checks)}",
+                    updated_user
+                )
+            else:
+                self.log_test(
+                    "Scenario 1 - SUNF Admin Updates Teacher",
+                    False,
+                    f"Expected 200, got {response.status_code}",
+                    response.text
+                )
+        except Exception as e:
+            self.log_test("Scenario 1 - SUNF Admin Updates Teacher", False, f"Exception: {str(e)}")
+
+    def test_scenario_2_sunf_admin_updates_rvsd_user(self):
+        """Scenario 2: SUNF admin attempts to update RVSD user - expect 403"""
+        print("\n=== SCENARIO 2: SUNF Admin Attempts to Update RVSD User ===")
+        
+        # Get RVSD users using JTECH superuser token
+        print("Finding an RVSD user...")
+        headers = {"Authorization": f"Bearer {self.jtech_token}"}
+        try:
+            response = requests.get(f"{BASE_URL}/users", headers=headers, timeout=10)
+            if response.status_code == 200:
+                all_users = response.json()
+                rvsd_users = [u for u in all_users if u.get("school_code") == "RVSD"]
+                
+                if not rvsd_users:
+                    self.log_test("Scenario 2 - Find RVSD User", False, "No RVSD users found")
+                    return
+                
+                rvsd_user = rvsd_users[0]
+                rvsd_user_id = rvsd_user["id"]
+                print(f"   Selected RVSD user: {rvsd_user.get('name', '')} (ID: {rvsd_user_id})")
+                
+                # Try to update with SUNF admin token
+                update_data = {"first_name": "ShouldFail"}
+                headers = {"Authorization": f"Bearer {self.sunf_token}"}
+                response = requests.put(
+                    f"{BASE_URL}/users/{rvsd_user_id}",
+                    headers=headers,
+                    json=update_data,
+                    timeout=10
+                )
+                
+                if response.status_code == 403:
+                    self.log_test(
+                        "Scenario 2 - SUNF Admin Cannot Update RVSD User",
+                        True,
+                        "Correctly returned 403 Forbidden"
+                    )
+                else:
+                    self.log_test(
+                        "Scenario 2 - SUNF Admin Cannot Update RVSD User",
+                        False,
+                        f"Expected 403, got {response.status_code}",
+                        response.text
+                    )
+            else:
+                self.log_test("Scenario 2 - Find RVSD User", False, f"Failed to get users: {response.status_code}")
+        except Exception as e:
+            self.log_test("Scenario 2 - SUNF Admin Cannot Update RVSD User", False, f"Exception: {str(e)}")
+
+    def test_scenario_3_sunf_admin_updates_superuser(self):
+        """Scenario 3: SUNF admin attempts to update JTECH superuser - expect 403"""
+        print("\n=== SCENARIO 3: SUNF Admin Attempts to Update Superuser ===")
+        
+        # Get JTECH superuser ID
+        print("Finding JTECH superuser...")
+        headers = {"Authorization": f"Bearer {self.jtech_token}"}
+        try:
+            response = requests.get(f"{BASE_URL}/auth/me", headers=headers, timeout=10)
+            if response.status_code == 200:
+                superuser = response.json()
+                superuser_id = superuser["id"]
+                print(f"   JTECH superuser ID: {superuser_id}")
+                
+                # Try to update with SUNF admin token
+                update_data = {"first_name": "ShouldFail"}
+                headers = {"Authorization": f"Bearer {self.sunf_token}"}
+                response = requests.put(
+                    f"{BASE_URL}/users/{superuser_id}",
+                    headers=headers,
+                    json=update_data,
+                    timeout=10
+                )
+                
+                if response.status_code == 403:
+                    self.log_test(
+                        "Scenario 3 - SUNF Admin Cannot Update Superuser",
+                        True,
+                        "Correctly returned 403 Forbidden"
+                    )
+                else:
+                    self.log_test(
+                        "Scenario 3 - SUNF Admin Cannot Update Superuser",
+                        False,
+                        f"Expected 403, got {response.status_code}",
+                        response.text
+                    )
+            else:
+                self.log_test("Scenario 3 - Get Superuser", False, f"Failed to get superuser: {response.status_code}")
+        except Exception as e:
+            self.log_test("Scenario 3 - SUNF Admin Cannot Update Superuser", False, f"Exception: {str(e)}")
+
+    def test_scenario_4_jtech_superuser_updates_sunf_teacher(self):
+        """Scenario 4: JTECH superuser updates a SUNF teacher - expect 200"""
+        print("\n=== SCENARIO 4: JTECH Superuser Updates SUNF Teacher ===")
+        
+        # Get SUNF teachers
+        print("Finding a SUNF teacher...")
+        headers = {"Authorization": f"Bearer {self.jtech_token}"}
+        try:
+            response = requests.get(f"{BASE_URL}/users", headers=headers, timeout=10)
+            if response.status_code == 200:
+                all_users = response.json()
+                sunf_teachers = [u for u in all_users if u.get("school_code") == "SUNF" and u.get("role") == "teacher"]
+                
+                if not sunf_teachers:
+                    self.log_test("Scenario 4 - Find SUNF Teacher", False, "No SUNF teachers found")
+                    return
+                
+                teacher = sunf_teachers[0]
+                teacher_id = teacher["id"]
+                print(f"   Selected teacher: {teacher.get('name', '')} (ID: {teacher_id})")
+                
+                # Update with superuser token
+                update_data = {
+                    "first_name": "SuperuserUpdated",
+                    "email": "superuser.updated@example.com"
+                }
+                headers = {"Authorization": f"Bearer {self.jtech_token}"}
+                response = requests.put(
+                    f"{BASE_URL}/users/{teacher_id}",
+                    headers=headers,
+                    json=update_data,
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    updated_user = response.json()
+                    
+                    # Verify updates
+                    checks = []
+                    if updated_user.get("first_name") == "SuperuserUpdated":
+                        checks.append("first_name updated ✓")
+                    else:
+                        checks.append(f"first_name NOT updated (got: {updated_user.get('first_name')})")
+                    
+                    if updated_user.get("email") == "superuser.updated@example.com":
+                        checks.append("email updated ✓")
+                    else:
+                        checks.append(f"email NOT updated (got: {updated_user.get('email')})")
+                    
+                    all_passed = all("✓" in check for check in checks)
+                    self.log_test(
+                        "Scenario 4 - Superuser Updates SUNF Teacher",
+                        all_passed,
+                        f"Update response 200. Checks: {', '.join(checks)}",
+                        updated_user
+                    )
+                else:
+                    self.log_test(
+                        "Scenario 4 - Superuser Updates SUNF Teacher",
+                        False,
+                        f"Expected 200, got {response.status_code}",
+                        response.text
+                    )
+            else:
+                self.log_test("Scenario 4 - Find SUNF Teacher", False, f"Failed to get users: {response.status_code}")
+        except Exception as e:
+            self.log_test("Scenario 4 - Superuser Updates SUNF Teacher", False, f"Exception: {str(e)}")
+
+    def test_scenario_5_empty_body(self):
+        """Scenario 5: PUT with empty body - expect 400"""
+        print("\n=== SCENARIO 5: PUT with Empty Body ===")
+        
+        # Get any SUNF teacher
+        sunf_users = self.get_users(self.sunf_token, "SUNF")
+        sunf_teachers = [u for u in sunf_users if u.get("role") == "teacher"]
+        
+        if not sunf_teachers:
+            self.log_test("Scenario 5 - Empty Body", False, "No SUNF teachers found for test")
+            return
+        
+        teacher_id = sunf_teachers[0]["id"]
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.sunf_token}"}
+            response = requests.put(
+                f"{BASE_URL}/users/{teacher_id}",
+                headers=headers,
+                json={},
+                timeout=10
+            )
+            
+            if response.status_code == 400:
+                self.log_test(
+                    "Scenario 5 - Empty Body Returns 400",
+                    True,
+                    "Correctly returned 400 Bad Request for empty body"
+                )
+            else:
+                self.log_test(
+                    "Scenario 5 - Empty Body Returns 400",
+                    False,
+                    f"Expected 400, got {response.status_code}",
+                    response.text
+                )
+        except Exception as e:
+            self.log_test("Scenario 5 - Empty Body Returns 400", False, f"Exception: {str(e)}")
+
+    def test_scenario_6_nonexistent_user(self):
+        """Scenario 6: PUT to non-existent user_id - expect 404"""
+        print("\n=== SCENARIO 6: PUT to Non-existent User ===")
+        
+        fake_user_id = "00000000-0000-0000-0000-000000000000"
+        update_data = {"first_name": "ShouldFail"}
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.sunf_token}"}
+            response = requests.put(
+                f"{BASE_URL}/users/{fake_user_id}",
+                headers=headers,
+                json=update_data,
+                timeout=10
+            )
+            
+            if response.status_code == 404:
+                self.log_test(
+                    "Scenario 6 - Non-existent User Returns 404",
+                    True,
+                    "Correctly returned 404 Not Found"
+                )
+            else:
+                self.log_test(
+                    "Scenario 6 - Non-existent User Returns 404",
+                    False,
+                    f"Expected 404, got {response.status_code}",
+                    response.text
+                )
+        except Exception as e:
+            self.log_test("Scenario 6 - Non-existent User Returns 404", False, f"Exception: {str(e)}")
+
+    def test_regression_student_update(self):
+        """Regression: PUT /api/students/{student_id} still works"""
+        print("\n=== REGRESSION TEST: PUT /api/students/{student_id} ===")
+        
+        # Get SUNF students
+        print("Finding a SUNF student...")
+        try:
+            headers = {"Authorization": f"Bearer {self.sunf_token}"}
+            response = requests.get(f"{BASE_URL}/students", headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                self.log_test("Regression - Get Students", False, f"Failed to get students: {response.status_code}")
+                return
+            
+            students = response.json()
+            if not students:
+                self.log_test("Regression - Get Students", False, "No SUNF students found")
+                return
+            
+            student = students[0]
+            student_id = student["id"]
+            print(f"   Selected student: {student.get('first_name', '')} {student.get('last_name', '')} (ID: {student_id})")
+            
+            # Get full student object
+            response = requests.get(f"{BASE_URL}/students/{student_id}", headers=headers, timeout=10)
+            if response.status_code != 200:
+                self.log_test("Regression - Get Student Details", False, f"Failed to get student: {response.status_code}")
+                return
+            
+            full_student = response.json()
+            
+            # Modify a few fields
+            full_student["student_phone"] = "+233-999-8888"
+            full_student["city_state"] = "Kumasi, Ashanti"
+            full_student["enrollment_status"] = "active"
+            
+            # PUT the whole object back
+            response = requests.put(
+                f"{BASE_URL}/students/{student_id}",
+                headers=headers,
+                json=full_student,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                updated_student = response.json()
+                
+                # Verify updates
+                checks = []
+                if updated_student.get("student_phone") == "+233-999-8888":
+                    checks.append("student_phone updated ✓")
+                else:
+                    checks.append(f"student_phone NOT updated (got: {updated_student.get('student_phone')})")
+                
+                if updated_student.get("city_state") == "Kumasi, Ashanti":
+                    checks.append("city_state updated ✓")
+                else:
+                    checks.append(f"city_state NOT updated (got: {updated_student.get('city_state')})")
+                
+                if updated_student.get("enrollment_status") == "active":
+                    checks.append("enrollment_status updated ✓")
+                else:
+                    checks.append(f"enrollment_status NOT updated (got: {updated_student.get('enrollment_status')})")
+                
+                # Verify persistence
+                response = requests.get(f"{BASE_URL}/students/{student_id}", headers=headers, timeout=10)
+                if response.status_code == 200:
+                    persisted = response.json()
+                    if (persisted.get("student_phone") == "+233-999-8888" and
+                        persisted.get("city_state") == "Kumasi, Ashanti" and
+                        persisted.get("enrollment_status") == "active"):
+                        checks.append("persistence verified ✓")
+                    else:
+                        checks.append("persistence FAILED")
+                
+                all_passed = all("✓" in check for check in checks)
+                self.log_test(
+                    "Regression - PUT /api/students/{id}",
+                    all_passed,
+                    f"Student update working. Checks: {', '.join(checks)}",
+                    updated_student
+                )
+            else:
+                self.log_test(
+                    "Regression - PUT /api/students/{id}",
+                    False,
+                    f"Expected 200, got {response.status_code}",
+                    response.text
+                )
+        except Exception as e:
+            self.log_test("Regression - PUT /api/students/{id}", False, f"Exception: {str(e)}")
+
+    def run_all_tests(self):
+        """Run all test scenarios"""
+        print("=" * 70)
+        print("🧪 Lumina-SIS Backend API Test Suite")
+        print("Testing PUT /api/users/{user_id} endpoint")
+        print("=" * 70)
         print()
         
-        # Test 1: Health check
-        print("1. Testing health endpoint...")
-        self.test_health_endpoint()
-        
-        # Test 2: Login
-        print("\n2. Testing authentication...")
-        if not self.test_login():
-            print("❌ Cannot proceed without authentication")
+        # Setup authentication
+        if not self.test_setup_authentication():
+            print("\n❌ Authentication failed. Cannot proceed with tests.")
             return self.print_summary()
         
-        # Test 3: Get initial report template
-        print("\n3. Testing GET report template...")
-        initial_template = self.test_report_template_get()
-        if not initial_template:
-            print("❌ Cannot proceed without initial template")
-            return self.print_summary()
-        
-        # Test 4: Update with custom dynamic weight keys
-        print("\n4. Testing PUT report template with CUSTOM dynamic weight keys...")
-        print("   Expected: homework=10, classwork=15, midTermExam=35, finalExam=40")
-        custom_success = self.test_report_template_update_custom_weights(initial_template)
-        
-        # Test 5: Verify persistence 
-        print("\n5. Testing persistence of custom weights...")
-        if custom_success:
-            self.test_report_template_verify_persistence()
-        else:
-            print("   ⚠️  Skipping persistence test due to update failure")
-        
-        # Test 6: Restore original weights
-        print("\n6. Testing restore original weights...")
-        print("   Expected: homework=5, groupWork=5, project=10, quiz=10, midTerm=30, endOfTerm=40")
-        self.test_report_template_restore_original(initial_template)
+        # Run all test scenarios
+        self.test_scenario_1_sunf_admin_updates_teacher()
+        self.test_scenario_2_sunf_admin_updates_rvsd_user()
+        self.test_scenario_3_sunf_admin_updates_superuser()
+        self.test_scenario_4_jtech_superuser_updates_sunf_teacher()
+        self.test_scenario_5_empty_body()
+        self.test_scenario_6_nonexistent_user()
+        self.test_regression_student_update()
         
         return self.print_summary()
     
     def print_summary(self):
         """Print test results summary"""
-        print("\n" + "=" * 60)
+        print("\n" + "=" * 70)
         print("📊 TEST RESULTS SUMMARY")
-        print("=" * 60)
+        print("=" * 70)
         
         passed = sum(1 for result in self.test_results if result["success"])
         total = len(self.test_results)
         
-        # Show individual results
-        for result in self.test_results:
-            status = "✅" if result["success"] else "❌"
-            print(f"{status} {result['test']}")
-            if not result["success"]:
-                print(f"    └─ {result['message']}")
+        # Group results by category
+        auth_tests = [r for r in self.test_results if "Login" in r["test"]]
+        user_update_tests = [r for r in self.test_results if "Scenario" in r["test"]]
+        regression_tests = [r for r in self.test_results if "Regression" in r["test"]]
         
-        print(f"\nResults: {passed}/{total} tests passed")
+        # Show authentication results
+        if auth_tests:
+            print("\n🔐 Authentication:")
+            for result in auth_tests:
+                status = "✅" if result["success"] else "❌"
+                print(f"  {status} {result['test']}")
+        
+        # Show user update test results
+        if user_update_tests:
+            print("\n👤 PUT /api/users/{user_id} Tests:")
+            for result in user_update_tests:
+                status = "✅" if result["success"] else "❌"
+                print(f"  {status} {result['test']}")
+                if not result["success"]:
+                    print(f"      └─ {result['message']}")
+        
+        # Show regression test results
+        if regression_tests:
+            print("\n🔄 Regression Tests:")
+            for result in regression_tests:
+                status = "✅" if result["success"] else "❌"
+                print(f"  {status} {result['test']}")
+                if not result["success"]:
+                    print(f"      └─ {result['message']}")
+        
+        print(f"\n{'=' * 70}")
+        print(f"Results: {passed}/{total} tests passed")
+        print(f"{'=' * 70}")
         
         if passed == total:
-            print("🎉 ALL TESTS PASSED! Report template dynamic weight keys are working correctly.")
+            print("🎉 ALL TESTS PASSED!")
             return True
         else:
             print("⚠️  Some tests failed. See details above.")
@@ -348,7 +605,7 @@ class APITester:
 def main():
     """Main test runner"""
     tester = APITester()
-    success = tester.run_focused_report_template_tests()
+    success = tester.run_all_tests()
     
     # Exit with error code if tests failed  
     sys.exit(0 if success else 1)
