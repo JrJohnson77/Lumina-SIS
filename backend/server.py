@@ -1358,6 +1358,7 @@ class UserProfileUpdate(BaseModel):
     country: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    photo_url: Optional[str] = None
 
 @api_router.put("/users/{user_id}", response_model=UserResponse)
 async def update_user_profile(

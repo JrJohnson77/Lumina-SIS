@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,7 @@ import {
     Pencil,
     Save,
     X,
+    Camera,
 } from 'lucide-react';
 import '../styles/student-profile.css';
 
@@ -144,7 +145,7 @@ export default function StaffProfilePage() {
         if (!staff) return null;
         const canEdit = isAdmin && (me?.role === 'superuser' || staff.role !== 'superuser');
         const reload = () => loadStaff(staff.id);
-        if (activeTab === 'dashboard') return <StaffDashboardTab staff={staff} initials={initials} onCardClick={onTabChange} />;
+        if (activeTab === 'dashboard') return <StaffDashboardTab staff={staff} initials={initials} onCardClick={onTabChange} canEdit={canEdit} onReload={reload} />;
         if (activeTab === 'profile')   return <StaffProfileTab staff={staff} canEdit={canEdit} onReload={reload} />;
         if (activeTab === 'contact')   return <StaffContactTab staff={staff} canEdit={canEdit} onReload={reload} />;
         if (activeTab === 'login')     return <StaffLoginTab staff={staff} me={me} onReload={reload} />;
@@ -280,7 +281,46 @@ export default function StaffProfilePage() {
 
 // ─── Tabs ─────────────────────────────────────────────────────────
 
-function StaffDashboardTab({ staff, initials, onCardClick }) {
+function StaffDashboardTab({ staff, initials, onCardClick, canEdit, onReload }) {
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const fileRef = useRef(null);
+
+    const resolvePhoto = (url) => (!url ? '' : (url.startsWith('http') ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`));
+
+    const handlePhotoChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) { toast.error('Image too large (max 5MB)'); e.target.value = ''; return; }
+        setUploadingPhoto(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            const up = await axios.post(`${API}/upload/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            await axios.put(`${API}/users/${staff.id}`, { photo_url: up.data.photo_url });
+            toast.success('Photo updated');
+            onReload?.();
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || 'Failed to upload photo');
+        } finally {
+            setUploadingPhoto(false);
+            if (e.target) e.target.value = '';
+        }
+    };
+
+    const handleRemovePhoto = async () => {
+        if (!window.confirm('Remove this photo?')) return;
+        setUploadingPhoto(true);
+        try {
+            await axios.put(`${API}/users/${staff.id}`, { photo_url: '' });
+            toast.success('Photo removed');
+            onReload?.();
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || 'Failed to remove photo');
+        } finally {
+            setUploadingPhoto(false);
+        }
+    };
+
     const cardProps = (key, extraClass = '') => onCardClick
         ? { onClick: () => onCardClick(key), className: `lp-card lp-card--clickable ${extraClass}`.trim(), role: 'button', tabIndex: 0,
             onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCardClick(key); } } }
@@ -292,19 +332,43 @@ function StaffDashboardTab({ staff, initials, onCardClick }) {
         <div className="lp-dashboard">
             {/* Avatar card (left col, spans 2 rows) */}
             <div className="lp-card lp-card--photo" data-testid="staff-card-avatar">
-                {staff.photo_url ? (
-                    <img src={staff.photo_url} alt={staff.name} className="lp-photo" />
-                ) : (
-                    <div
-                        className="lp-photo"
-                        style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 56, fontWeight: 700, color: 'hsl(var(--primary))',
-                            background: 'hsl(var(--primary) / 0.10)', letterSpacing: '-0.04em',
-                        }}
-                    >
-                        {initials}
-                    </div>
+                <div className="lp-photo-wrap">
+                    {staff.photo_url ? (
+                        <img src={resolvePhoto(staff.photo_url)} alt={staff.name} className="lp-photo" />
+                    ) : (
+                        <div
+                            className="lp-photo"
+                            style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 56, fontWeight: 700, color: 'hsl(var(--primary))',
+                                background: 'hsl(var(--primary) / 0.10)', letterSpacing: '-0.04em',
+                            }}
+                        >
+                            {initials}
+                        </div>
+                    )}
+                    {canEdit && (
+                        <button
+                            type="button"
+                            className="lp-photo-edit"
+                            onClick={() => fileRef.current?.click()}
+                            disabled={uploadingPhoto}
+                            title={staff.photo_url ? 'Change photo' : 'Upload photo'}
+                            data-testid="staff-photo-upload-btn"
+                        >
+                            <Camera size={14} /> {uploadingPhoto ? 'Uploading…' : (staff.photo_url ? 'Change' : 'Upload')}
+                        </button>
+                    )}
+                </div>
+                {canEdit && (
+                    <>
+                        <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: 'none' }} data-testid="staff-photo-input" />
+                        {staff.photo_url && (
+                            <button type="button" className="lp-photo-remove" onClick={handleRemovePhoto} disabled={uploadingPhoto} data-testid="staff-photo-remove-btn">
+                                <X size={11} /> Remove
+                            </button>
+                        )}
+                    </>
                 )}
                 <div style={{ marginTop: 12, textAlign: 'center', width: '100%' }}>
                     <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 4 }}>

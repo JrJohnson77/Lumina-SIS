@@ -122,6 +122,9 @@ backend:
         - working: true
           agent: "main"
           comment: "Fixed empty-body edge case: name recompute now runs only when a name part is provided, and empty-update check happens before mutation. Verified via curl: empty body -> 400, valid body -> 200."
+        - working: true
+          agent: "main"
+          comment: "Added photo_url to UserProfileUpdate so admin/superuser can set/remove a staff member's photo. Verified via curl: setting photo_url persists, empty string removes it."
 
   - task: "API health check and branding update"
     implemented: true
@@ -181,6 +184,18 @@ backend:
           comment: "✅ TESTED TEACHER CREATION WITH NEW FIELDS: POST /api/users successfully creates teachers with all extended fields including salutation, first_name, middle_name, last_name, gender, address_line1, city_state, country, phone, email. All fields are properly stored and returned. User model extension fully functional."
 
 frontend:
+  - task: "Clickable dashboard cards + view/edit profile tabs (Student & Staff)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/StudentProfilePage.js, frontend/src/pages/StaffProfilePage.js, frontend/src/components/student-profile/DashboardTab.js, ContactTab.js, ProfileTab.js, SchoolTab.js, FamilyTab.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Student dashboard cards (Contact, Student Information, School Information, Family, Attendance) are now clickable and navigate to matching right-panel tab. New tabs Contact/Student Info added; School tab made real. Contact/Profile/School/Family tabs are view-only for teachers and inline-editable (Edit -> fields -> Save/Cancel) for admin/superuser. Family tab supports add/edit/delete members. Staff dashboard: Identity card -> Profile tab, Contact card -> Contact tab; Profile & Contact tabs editable for admin/superuser. Photo upload/remove added to student photo card and staff avatar card (admin/superuser only) via POST /api/upload/photo + PUT student/user. Teachers should NOT see Edit/Upload buttons."
+
   - task: "Students Page - Extended Form with Family Members"
     implemented: true
     working: true

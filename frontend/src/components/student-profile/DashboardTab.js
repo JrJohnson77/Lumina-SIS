@@ -1,12 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
     Home, Phone, Smartphone, Mail, GraduationCap, School,
-    Users, Plus, ExternalLink, User, ChevronRight,
+    Users, Plus, ExternalLink, User, ChevronRight, Camera, X,
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const buildStudentPayload = (student, overrides) => {
+    const { id, school_code, age, created_at, updated_at, ...rest } = student;
+    return { ...rest, ...overrides };
+};
+
+const resolvePhoto = (url) => {
+    if (!url) return '';
+    return url.startsWith('http') ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`;
+};
 
 const ageFromDob = (dob) => {
     if (!dob) return '';
@@ -75,10 +86,48 @@ const Donut = ({ values, size = 100, thickness = 18 }) => {
     );
 };
 
-export default function DashboardTab({ student, classMap, onCardClick }) {
+export default function DashboardTab({ student, classMap, onCardClick, canEdit, onReload }) {
     const [attendance, setAttendance] = useState({ present: 0, absent: 0, late: 0, excused: 0, total: 0, percent_present: 0 });
     const [loadingAtt, setLoadingAtt] = useState(true);
     const [homeroomTeacher, setHomeroomTeacher] = useState('');
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const fileRef = useRef(null);
+
+    const handlePhotoChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) { toast.error('Image too large (max 5MB)'); e.target.value = ''; return; }
+        setUploadingPhoto(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            const up = await axios.post(`${API}/upload/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            const payload = buildStudentPayload(student, { photo_url: up.data.photo_url });
+            await axios.put(`${API}/students/${student.id}`, payload);
+            toast.success('Photo updated');
+            onReload?.();
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || 'Failed to upload photo');
+        } finally {
+            setUploadingPhoto(false);
+            if (e.target) e.target.value = '';
+        }
+    };
+
+    const handleRemovePhoto = async () => {
+        if (!window.confirm('Remove this photo?')) return;
+        setUploadingPhoto(true);
+        try {
+            const payload = buildStudentPayload(student, { photo_url: '' });
+            await axios.put(`${API}/students/${student.id}`, payload);
+            toast.success('Photo removed');
+            onReload?.();
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || 'Failed to remove photo');
+        } finally {
+            setUploadingPhoto(false);
+        }
+    };
 
     const currentClass = useMemo(() => classMap.get(student.class_id), [classMap, student.class_id]);
 
@@ -142,12 +191,36 @@ export default function DashboardTab({ student, classMap, onCardClick }) {
             <div className="lp-dashboard">
                 {/* === Photo card === */}
                 <div className="lp-card lp-card--photo" data-testid="card-photo">
-                    {student.photo_url ? (
-                        <img src={student.photo_url} alt={fullName} className="lp-photo" />
-                    ) : (
-                        <div className="lp-photo lp-photo--placeholder">
-                            <User size={48} />
-                        </div>
+                    <div className="lp-photo-wrap">
+                        {student.photo_url ? (
+                            <img src={resolvePhoto(student.photo_url)} alt={fullName} className="lp-photo" />
+                        ) : (
+                            <div className="lp-photo lp-photo--placeholder">
+                                <User size={48} />
+                            </div>
+                        )}
+                        {canEdit && (
+                            <button
+                                type="button"
+                                className="lp-photo-edit"
+                                onClick={() => fileRef.current?.click()}
+                                disabled={uploadingPhoto}
+                                title={student.photo_url ? 'Change photo' : 'Upload photo'}
+                                data-testid="student-photo-upload-btn"
+                            >
+                                <Camera size={14} /> {uploadingPhoto ? 'Uploading…' : (student.photo_url ? 'Change' : 'Upload')}
+                            </button>
+                        )}
+                    </div>
+                    {canEdit && (
+                        <>
+                            <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: 'none' }} data-testid="student-photo-input" />
+                            {student.photo_url && (
+                                <button type="button" className="lp-photo-remove" onClick={handleRemovePhoto} disabled={uploadingPhoto} data-testid="student-photo-remove-btn">
+                                    <X size={11} /> Remove
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
 
