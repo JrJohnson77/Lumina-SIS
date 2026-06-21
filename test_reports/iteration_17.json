@@ -8,7 +8,7 @@
   },
   "passed_tests": [
     "BACKEND pytest (6/6): test_admin_fetches_own_school_user, test_cross_tenant_access_denied (403 SUNF->RVSD), test_unknown_user_returns_404, test_unauthenticated_blocked, test_teacher_role_cannot_fetch_user (role gating), test_sunf_admin_users_list_scoped (no password_hash + tenant scoping)",
-    "SUNF admin login -> /staff auto-redirects to /staff/<first-id>#dashboard (verified id=fb1275ff-c50f-4f71-a017-980d962e45f4)",
+    "SUNF admin login -> /staff auto-redirects to /staff/<first-id>#dashboard (verified id=repo-refresh-18)",
     "Staff Profile 3-panel structure: [data-testid='lumina-staff-profile'] wraps staff-actionbar then 3-panel body (staff-roster-panel | staff-center | staff-tabs); H1 staff-name lives INSIDE staff-center (h1_center=True, h1_roster=False); 3 tab buttons live INSIDE staff-tabs only (tabs_in_tabs=3, tabs_in_center=0)",
     "Staff roster filters: filter-type disabled with value='Staff'; filter-role options = [All Staff, Admin, Teacher, Superuser]; filter-search live filtering input present",
     "Roster shows 7 SUNF staff rows; NO parents in roster (verified via text scan)",

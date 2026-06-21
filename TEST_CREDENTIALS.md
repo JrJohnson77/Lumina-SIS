@@ -180,7 +180,7 @@ The system now has **3 schools** with comprehensive dummy data:
 ## 🚀 Quick Start Testing Guide
 
 ### Step 1: Login to Sunflower Academy
-1. Go to: `https://repo-rebuild-app.preview.emergentagent.com`
+1. Go to: `https://repo-refresh-18.preview.emergentagent.com`
 2. Enter School Code: `SUNF`
 3. Username: `admin`
 4. Password: `Admin@123`
