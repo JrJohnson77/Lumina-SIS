@@ -425,7 +425,7 @@ export const Layout = ({ children }) => {
             {/* Main content */}
             <div className={`main-content ${collapsed ? 'main-content--collapsed' : ''}`}>
                 {/* Top bar */}
-                <header className="flex items-center justify-between mb-3 min-h-[44px]">
+                <header className="flex items-center justify-between mb-3 min-h-[56px] py-1">
                     <button
                         className="md:hidden p-2 hover:bg-muted rounded-lg transition-colors"
                         onClick={() => setSidebarOpen(true)}
@@ -435,11 +435,11 @@ export const Layout = ({ children }) => {
                     </button>
 
                     <div className="flex-1 md:flex-none md:min-w-[260px]">
-                        <div className="hidden md:flex flex-col leading-tight pl-1" data-testid="app-header-brand">
-                            <span className="text-lg font-bold tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', color: 'hsl(var(--primary))' }}>
+                        <div className="hidden md:flex flex-col justify-center leading-tight pl-1" data-testid="app-header-brand">
+                            <span className="text-base font-bold tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', color: 'hsl(var(--primary))', lineHeight: '1.15' }}>
                                 Lumina-SIS
                             </span>
-                            <span className="text-xs font-medium text-muted-foreground truncate" data-testid="app-header-school">
+                            <span className="text-[11px] font-medium text-muted-foreground truncate" style={{ lineHeight: '1.2' }} data-testid="app-header-school">
                                 {schoolName || schoolCode || ''}
                             </span>
                         </div>
@@ -450,7 +450,7 @@ export const Layout = ({ children }) => {
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
-                                    className="flex items-center gap-2 rounded-lg h-10 px-2 hover:bg-muted"
+                                    className="flex items-center gap-2 rounded-lg h-9 px-2 hover:bg-muted"
                                     data-testid="user-menu-btn"
                                 >
                                     <Avatar className="w-8 h-8">

@@ -8,21 +8,19 @@
 .lumina-profile-page {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 80px);
+    height: calc(100vh - 116px);
     overflow: hidden;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     font-size: 13.5px;
     color: hsl(var(--foreground));
     background: hsl(var(--background));
-    margin: -20px -20px -20px -20px;
-    margin-top: -12px;
+    margin: 0 -20px -20px -20px;
     border-radius: 16px;
 }
 @media (min-width: 768px) {
     .lumina-profile-page {
-        height: calc(100vh - 88px);
-        margin: -32px -32px -32px -32px;
-        margin-top: -20px;
+        height: calc(100vh - 128px);
+        margin: 0 -32px -32px -32px;
     }
 }
 
