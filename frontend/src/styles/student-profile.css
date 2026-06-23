@@ -8,19 +8,21 @@
 .lumina-profile-page {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 100px);
+    height: calc(100vh - 80px);
     overflow: hidden;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     font-size: 13.5px;
     color: hsl(var(--foreground));
     background: hsl(var(--background));
-    margin: -20px;
+    margin: -20px -20px -20px -20px;
+    margin-top: -12px;
     border-radius: 16px;
 }
 @media (min-width: 768px) {
     .lumina-profile-page {
-        height: calc(100vh - 112px);
-        margin: -32px;
+        height: calc(100vh - 88px);
+        margin: -32px -32px -32px -32px;
+        margin-top: -20px;
     }
 }
 
@@ -28,10 +30,10 @@
 .lumina-profile-topbar {
     display: flex;
     align-items: center;
-    height: 56px;
+    height: 44px;
     background: hsl(var(--card));
     border-bottom: 1px solid hsl(var(--border));
-    padding: 0 24px;
+    padding: 0 20px;
     flex-shrink: 0;
     z-index: 10;
 }
@@ -97,28 +99,30 @@
     flex-shrink: 0;
 }
 .roster-filters {
-    padding: 16px;
+    padding: 10px 12px;
     border-bottom: 1px solid hsl(var(--border));
     flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
 }
-.lp-field { display: flex; flex-direction: column; gap: 4px; }
+.lp-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lp-field--full { grid-column: 1 / -1; }
 .lp-field__label {
-    font-size: 10.5px;
+    font-size: 9.5px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: hsl(var(--muted-foreground));
     font-weight: 600;
+    line-height: 1.2;
 }
 .lp-select, .lp-input {
     width: 100%;
-    height: 36px;
-    padding: 0 12px;
+    height: 30px;
+    padding: 0 10px;
     border: 1px solid hsl(var(--border));
-    border-radius: 10px;
-    font-size: 13px;
+    border-radius: 8px;
+    font-size: 12.5px;
     background: hsl(var(--card));
     color: hsl(var(--foreground));
     outline: none;
@@ -132,17 +136,17 @@
 .lp-search { position: relative; }
 .lp-search__icon {
     position: absolute;
-    right: 4px;
-    top: 4px;
-    height: 28px;
-    width: 28px;
+    right: 3px;
+    top: 3px;
+    height: 24px;
+    width: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
     border: none;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
     transition: background .15s;
 }
@@ -174,17 +178,17 @@
     flex: 1;
     overflow-y: auto;
     min-height: 0;
-    padding: 8px;
+    padding: 6px;
 }
 .lp-roster__row {
-    padding: 10px 12px;
-    margin-bottom: 2px;
-    border-radius: 10px;
-    font-size: 13px;
+    padding: 7px 10px;
+    margin-bottom: 1px;
+    border-radius: 8px;
+    font-size: 12.5px;
     color: hsl(var(--foreground));
     cursor: pointer;
     user-select: none;
-    line-height: 1.3;
+    line-height: 1.25;
     transition: background .15s, color .15s, transform .15s;
 }
 .lp-roster__row:hover { background: hsl(var(--muted)); }
@@ -195,16 +199,16 @@
     box-shadow: inset 3px 0 0 hsl(var(--primary));
 }
 .lp-roster__empty {
-    padding: 32px 16px;
+    padding: 24px 12px;
     text-align: center;
     color: hsl(var(--muted-foreground));
-    font-size: 12.5px;
+    font-size: 12px;
 }
 
 .roster-footer {
-    padding: 14px 16px;
+    padding: 8px 12px;
     border-top: 1px solid hsl(var(--border));
-    font-size: 12px;
+    font-size: 11.5px;
     color: hsl(var(--muted-foreground));
     display: flex;
     justify-content: space-between;
@@ -229,15 +233,15 @@
 .lumina-profile-center {
     flex: 1;
     overflow-y: auto;
-    padding: 28px 32px;
+    padding: 16px 24px 24px;
     min-width: 0;
 }
 .lp-center__title {
     font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-    font-size: 28px;
+    font-size: 22px;
     font-weight: 700;
     color: hsl(var(--foreground));
-    margin: 0 0 24px;
+    margin: 0 0 14px;
     letter-spacing: -0.02em;
     line-height: 1.2;
 }
@@ -684,7 +688,7 @@
 
 /* Responsive */
 @media (max-width: 1023px) {
-    .lumina-profile-page { height: auto; min-height: calc(100vh - 100px); }
+    .lumina-profile-page { height: auto; min-height: calc(100vh - 80px); }
     .lumina-profile-body { flex-direction: column; overflow: visible; }
     .lumina-profile-left, .lumina-profile-right {
         width: 100%;

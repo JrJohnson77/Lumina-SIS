@@ -425,7 +425,7 @@ export const Layout = ({ children }) => {
             {/* Main content */}
             <div className={`main-content ${collapsed ? 'main-content--collapsed' : ''}`}>
                 {/* Top bar */}
-                <header className="flex items-center justify-between mb-6 min-h-[56px]">
+                <header className="flex items-center justify-between mb-3 min-h-[44px]">
                     <button
                         className="md:hidden p-2 hover:bg-muted rounded-lg transition-colors"
                         onClick={() => setSidebarOpen(true)}

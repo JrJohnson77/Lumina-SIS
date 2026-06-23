@@ -213,7 +213,7 @@ export default function StaffProfilePage() {
                                 {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
                             </select>
                         </div>
-                        <div className="lp-field">
+                        <div className="lp-field lp-field--full">
                             <label className="lp-field__label">Search</label>
                             <div className="lp-search">
                                 <input
