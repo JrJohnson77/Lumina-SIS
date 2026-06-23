@@ -155,9 +155,40 @@ export default function StaffProfilePage() {
     return (
         <div className="lumina-profile-page" data-testid="lumina-staff-profile">
             <div className="lumina-profile-topbar" data-testid="staff-actionbar">
-                <span className="topbar-name" data-testid="staff-actionbar-name">
-                    {fullName || (staffLoading ? 'Loading…' : 'No staff member selected')}
-                </span>
+                <div className="flex items-center gap-3 min-w-0">
+                    <span className="topbar-name" data-testid="staff-actionbar-name">
+                        {fullName || (staffLoading ? 'Loading…' : 'No staff member selected')}
+                    </span>
+                    {staff && (
+                        <>
+                            <span
+                                className="lp-badge lp-badge--info"
+                                style={{ fontSize: 11, textTransform: 'capitalize' }}
+                                data-testid="staff-topbar-role"
+                            >
+                                {staff.role}
+                            </span>
+                            {staff.email && (
+                                <span className="hidden md:inline-flex items-center gap-1 text-xs text-muted-foreground" data-testid="staff-topbar-email">
+                                    <Mail size={12} /> {staff.email}
+                                </span>
+                            )}
+                            {staff.phone && (
+                                <span className="hidden lg:inline-flex items-center gap-1 text-xs text-muted-foreground" data-testid="staff-topbar-phone">
+                                    <Phone size={12} /> {staff.phone}
+                                </span>
+                            )}
+                        </>
+                    )}
+                </div>
+                <div className="topbar-actions">
+                    <span
+                        className="hidden md:inline-flex items-center text-xs text-muted-foreground px-2"
+                        data-testid="staff-topbar-count"
+                    >
+                        {filteredRoster.length} {filteredRoster.length === 1 ? 'staff member' : 'staff members'}
+                    </span>
+                </div>
             </div>
 
             <div className="lumina-profile-body">

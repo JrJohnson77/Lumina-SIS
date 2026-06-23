@@ -34,9 +34,12 @@ import {
     RefreshCw,
     Settings,
     History,
+    PanelLeftClose,
+    PanelLeftOpen,
 } from 'lucide-react';
 
 const SIDEBAR_STORAGE_KEY = 'lumina_sidebar_open_groups';
+const SIDEBAR_COLLAPSED_KEY = 'lumina_sidebar_collapsed';
 
 // FACTS-style grouped sidebar configuration.
 // Each group has a label, an icon, and a list of items.
@@ -140,26 +143,44 @@ const getRoleBadgeColor = (role) => {
     }
 };
 
-const NavLink = ({ item, isActive, onNavigate }) => {
+const NavLink = ({ item, isActive, onNavigate, collapsed }) => {
     const Icon = item.icon;
     return (
         <Link
             to={item.to}
             onClick={onNavigate}
-            className={`nav-item ${isActive ? 'active' : ''}`}
+            className={`nav-item ${isActive ? 'active' : ''} ${collapsed ? 'nav-item--collapsed' : ''}`}
             data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`}
+            title={collapsed ? item.label : undefined}
         >
             <Icon className="w-[18px] h-[18px] flex-shrink-0" />
-            <span>{item.label}</span>
+            {!collapsed && <span>{item.label}</span>}
         </Link>
     );
 };
 
-const NavGroup = ({ group, isOpen, onToggle, role, currentPath, onNavigate }) => {
+const NavGroup = ({ group, isOpen, onToggle, role, currentPath, onNavigate, collapsed }) => {
     const visibleItems = group.items.filter((item) => item.roles.includes(role));
     if (visibleItems.length === 0) return null;
     const GroupIcon = group.icon;
     const isAnyActive = visibleItems.some((i) => currentPath === i.to);
+
+    // Collapsed: show icon-only list (no group headers)
+    if (collapsed) {
+        return (
+            <div className="space-y-0.5">
+                {visibleItems.map((item) => (
+                    <NavLink
+                        key={item.to}
+                        item={item}
+                        isActive={currentPath === item.to}
+                        onNavigate={onNavigate}
+                        collapsed
+                    />
+                ))}
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-1">
@@ -220,10 +241,25 @@ const persistOpenGroups = (groupsSet) => {
 
 export const Layout = ({ children }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [collapsed, setCollapsed] = useState(() => {
+        try {
+            return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+        } catch (_e) {
+            return false;
+        }
+    });
     const { user, logout, schoolCode } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [schoolName, setSchoolName] = useState('');
+
+    const toggleCollapsed = () => {
+        setCollapsed((prev) => {
+            const next = !prev;
+            try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0'); } catch (_e) { /* ignore */ }
+            return next;
+        });
+    };
 
     // Fetch the user's school's display name once for header branding
     useEffect(() => {
@@ -298,31 +334,51 @@ export const Layout = ({ children }) => {
             )}
 
             {/* Sidebar */}
-            <aside className={`sidebar ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`} data-testid="sidebar">
+            <aside
+                className={`sidebar ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${collapsed ? 'sidebar--collapsed' : ''}`}
+                data-testid="sidebar"
+                data-collapsed={collapsed ? '1' : '0'}
+            >
                 <div className="flex flex-col h-full">
                     {/* Logo */}
-                    <div className="flex items-center justify-between px-5 py-5">
+                    <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-5 py-5`}>
                         <Link to="/dashboard" className="flex items-center gap-3" onClick={closeMobileSidebar}>
-                            <img src="/lumina-logo.png" alt="Lumina-SIS" className="w-9 h-9 object-contain rounded-lg" />
-                            <div>
-                                <h1 className="font-extrabold text-white text-base tracking-tight">Lumina-SIS</h1>
-                                <p className="text-[11px] font-medium" style={{ color: 'hsl(var(--sidebar-muted))' }}>{schoolCode}</p>
-                            </div>
+                            <img src="/lumina-logo.png" alt="Lumina-SIS" className="w-9 h-9 object-contain rounded-lg flex-shrink-0" />
+                            {!collapsed && (
+                                <div>
+                                    <h1 className="font-extrabold text-white text-base tracking-tight">Lumina-SIS</h1>
+                                    <p className="text-[11px] font-medium" style={{ color: 'hsl(var(--sidebar-muted))' }}>{schoolCode}</p>
+                                </div>
+                            )}
                         </Link>
-                        <button
-                            className="md:hidden p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                            style={{ color: 'hsl(var(--sidebar-muted))' }}
-                            onClick={closeMobileSidebar}
-                            data-testid="sidebar-close-btn"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
+                        {!collapsed && (
+                            <button
+                                className="md:hidden p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                                style={{ color: 'hsl(var(--sidebar-muted))' }}
+                                onClick={closeMobileSidebar}
+                                data-testid="sidebar-close-btn"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        )}
                     </div>
+
+                    {/* Desktop collapse toggle */}
+                    <button
+                        type="button"
+                        onClick={toggleCollapsed}
+                        className="sidebar-collapse-toggle"
+                        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                        data-testid="sidebar-collapse-btn"
+                    >
+                        {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+                    </button>
 
                     <div className="sidebar-divider" />
 
                     {/* Grouped Navigation */}
-                    <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto" data-testid="sidebar-nav">
+                    <nav className={`flex-1 ${collapsed ? 'px-2' : 'px-3'} py-4 space-y-2 overflow-y-auto overflow-x-hidden`} data-testid="sidebar-nav">
                         {NAV_GROUPS.map((group) => (
                             <NavGroup
                                 key={group.key}
@@ -332,35 +388,42 @@ export const Layout = ({ children }) => {
                                 role={user?.role}
                                 currentPath={location.pathname}
                                 onNavigate={closeMobileSidebar}
+                                collapsed={collapsed}
                             />
                         ))}
                     </nav>
 
                     {/* User section */}
                     <div className="sidebar-divider" />
-                    <div className="p-3">
-                        <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'hsl(var(--sidebar-fg) / 0.04)' }}>
-                            <Avatar className="w-9 h-9">
+                    <div className={collapsed ? 'p-2' : 'p-3'}>
+                        <div
+                            className={`flex items-center gap-3 ${collapsed ? 'p-2 justify-center' : 'p-3'} rounded-lg`}
+                            style={{ background: 'hsl(var(--sidebar-fg) / 0.04)' }}
+                            title={collapsed ? `${user?.name} (${user?.role})` : undefined}
+                        >
+                            <Avatar className="w-9 h-9 flex-shrink-0">
                                 <AvatarFallback className={`text-xs font-bold ${getRoleBadgeStyle(user?.role)}`}>
                                     {getInitials(user?.name)}
                                 </AvatarFallback>
                             </Avatar>
-                            <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-sm text-white truncate">{user?.name}</p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                    {user?.role === 'superuser' && <Shield className="w-3 h-3 text-violet-400" />}
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold capitalize ${getRoleBadgeStyle(user?.role)}`}>
-                                        {user?.role}
-                                    </span>
+                            {!collapsed && (
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-sm text-white truncate">{user?.name}</p>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                        {user?.role === 'superuser' && <Shield className="w-3 h-3 text-violet-400" />}
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold capitalize ${getRoleBadgeStyle(user?.role)}`}>
+                                            {user?.role}
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>
             </aside>
 
             {/* Main content */}
-            <div className="main-content">
+            <div className={`main-content ${collapsed ? 'main-content--collapsed' : ''}`}>
                 {/* Top bar */}
                 <header className="flex items-center justify-between mb-6 min-h-[56px]">
                     <button

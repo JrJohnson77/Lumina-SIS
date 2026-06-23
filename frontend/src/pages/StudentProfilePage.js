@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import {
     Search,
     Trash2,
-    Bell,
     Mail,
     BarChart3,
     Loader2,
@@ -19,7 +18,6 @@ import AttendanceTab from '../components/student-profile/AttendanceTab';
 import FamilyTab from '../components/student-profile/FamilyTab';
 import MedicalTab from '../components/student-profile/MedicalTab';
 import BehaviorTab from '../components/student-profile/BehaviorTab';
-import EmptyTab from '../components/student-profile/EmptyTab';
 import ContactTab from '../components/student-profile/ContactTab';
 import ProfileTab from '../components/student-profile/ProfileTab';
 import SchoolTab from '../components/student-profile/SchoolTab';
@@ -72,14 +70,10 @@ const TABS = [
     { key: 'profile',    label: 'Student Info' },
     { key: 'contact',    label: 'Contact' },
     { key: 'academics',  label: 'Academics' },
-    { key: 'alerts',     label: 'Alerts' },
     { key: 'attendance', label: 'Attendance' },
     { key: 'behavior',   label: 'Behavior' },
     { key: 'family',     label: 'Family' },
-    { key: 'interests',  label: 'Interests' },
-    { key: 'login',      label: 'Login Management' },
     { key: 'medical',    label: 'Medical' },
-    { key: 'schedule',   label: 'Schedule' },
     { key: 'school',     label: 'School' },
 ];
 
@@ -242,7 +236,6 @@ export default function StudentProfilePage() {
         }
     };
 
-    const handleAlerts = () => onTabChange('alerts');
     const handleReports = () => navigate('/reports');
     const handleEmailInstructors = () => {
         // Best-effort: open mailto with the homeroom teacher's email if class is mapped
@@ -271,10 +264,6 @@ export default function StudentProfilePage() {
             case 'family':     return <FamilyTab {...props} />;
             case 'behavior':   return <BehaviorTab {...props} />;
             case 'medical':    return <MedicalTab {...props} />;
-            case 'alerts':     return <EmptyTab tabLabel="Alerts" comingSoon />;
-            case 'interests':  return <EmptyTab tabLabel="Interests" comingSoon />;
-            case 'login':      return <EmptyTab tabLabel="Login Management" comingSoon />;
-            case 'schedule':   return <EmptyTab tabLabel="Schedule" comingSoon />;
             default:           return <DashboardTab {...props} onCardClick={onTabChange} />;
         }
     };
@@ -298,13 +287,6 @@ export default function StudentProfilePage() {
                             testid="profile-delete-btn"
                         />
                     )}
-                    <TopBarAction
-                        icon={Bell}
-                        label="Alerts"
-                        onClick={handleAlerts}
-                        disabled={!student}
-                        testid="profile-alerts-btn"
-                    />
                     <TopBarAction
                         icon={Mail}
                         label="Email Instructors"

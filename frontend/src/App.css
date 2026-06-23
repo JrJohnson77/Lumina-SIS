@@ -5,13 +5,13 @@
 /* Sidebar */
 .sidebar {
     @apply fixed left-0 top-0 h-screen w-64 z-40;
-    @apply transition-transform duration-300 ease-in-out;
+    @apply transition-all duration-300 ease-in-out;
     background: hsl(var(--sidebar-bg));
     color: hsl(var(--sidebar-fg));
 }
 
-.sidebar-collapsed {
-    @apply -translate-x-full md:translate-x-0 md:w-20;
+.sidebar--collapsed {
+    @apply md:w-[76px];
 }
 
 /* Main content area */
@@ -19,8 +19,28 @@
     @apply ml-0 md:ml-64 min-h-screen p-5 md:p-8 transition-all duration-300;
 }
 
-.main-content-collapsed {
-    @apply md:ml-20;
+.main-content--collapsed {
+    @apply md:ml-[76px];
+}
+
+/* Sidebar collapse toggle (desktop only) */
+.sidebar-collapse-toggle {
+    @apply hidden md:flex items-center justify-center;
+    @apply absolute top-6 -right-3 w-6 h-6 rounded-full;
+    @apply transition-all duration-200 z-50;
+    background: hsl(var(--sidebar-bg));
+    color: hsl(var(--sidebar-muted));
+    border: 1px solid hsl(var(--sidebar-fg) / 0.12);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.sidebar-collapse-toggle:hover {
+    color: hsl(var(--sidebar-fg));
+    background: hsl(var(--sidebar-fg) / 0.08);
+}
+
+/* When collapsed, nav-item is icon-only and centered */
+.nav-item--collapsed {
+    @apply justify-center px-2;
 }
 
 /* Stat cards */

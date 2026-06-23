@@ -51,6 +51,7 @@ export default function StudentsPage() {
     const [deleteTarget, setDeleteTarget] = useState(null); // {id, name}
     const [deleting, setDeleting] = useState(false);
     const [siblingSuggestions, setSiblingSuggestions] = useState([]);
+    const [classFilter, setClassFilter] = useState('all');
     const fileInputRef = useRef(null);
     const { isAdmin, isTeacher, isParent } = useAuth();
 
@@ -204,8 +205,18 @@ export default function StudentsPage() {
     const filteredStudents = students.filter(s => {
         const fullName = `${s.first_name} ${s.middle_name || ''} ${s.last_name}`.toLowerCase();
         const studentId = (s.student_id || '').toLowerCase();
-        return fullName.includes(searchQuery.toLowerCase()) || studentId.includes(searchQuery.toLowerCase());
+        const matchesQuery = fullName.includes(searchQuery.toLowerCase()) || studentId.includes(searchQuery.toLowerCase());
+        const matchesClass = classFilter === 'all' || s.class_id === classFilter || (classFilter === 'unassigned' && !s.class_id);
+        return matchesQuery && matchesClass;
     });
+
+    const stats = useMemo(() => {
+        const total = students.length;
+        const male = students.filter((s) => (s.gender || '').toLowerCase() === 'male').length;
+        const female = students.filter((s) => (s.gender || '').toLowerCase() === 'female').length;
+        const unassigned = students.filter((s) => !s.class_id).length;
+        return { total, male, female, unassigned };
+    }, [students]);
 
     const getClassName = (classId) => classes.find(c => c.id === classId)?.name || '-';
 
@@ -223,16 +234,36 @@ export default function StudentsPage() {
 
     return (
         <div data-testid="students-page">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            {/* Top header row: title + stats + add button */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                 <div className="page-header mb-0">
                     <h1>Students</h1>
                     <p>{isParent ? "View your children's information" : 'Manage student records'}</p>
                 </div>
-                {(isAdmin || isTeacher) && (
-                    <Dialog open={isDialogOpen} onOpenChange={(open) => {
-                        setIsDialogOpen(open);
-                        if (!open) { setEditingStudent(null); setFormData(initialFormData); setExpandedFamily({}); }
-                    }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <div className="hidden md:flex items-center gap-2" data-testid="students-stats">
+                        <div className="px-3 py-2 rounded-xl bg-primary/8 border border-primary/15 text-sm">
+                            <span className="text-muted-foreground text-xs">Total</span>
+                            <span className="ml-2 font-bold text-foreground">{stats.total}</span>
+                        </div>
+                        <div className="px-3 py-2 rounded-xl bg-sky-50 border border-sky-100 text-sm">
+                            <span className="text-sky-600 text-xs">Male</span>
+                            <span className="ml-2 font-bold text-sky-700">{stats.male}</span>
+                        </div>
+                        <div className="px-3 py-2 rounded-xl bg-rose-50 border border-rose-100 text-sm">
+                            <span className="text-rose-600 text-xs">Female</span>
+                            <span className="ml-2 font-bold text-rose-700">{stats.female}</span>
+                        </div>
+                        <div className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-100 text-sm">
+                            <span className="text-amber-700 text-xs">Unassigned</span>
+                            <span className="ml-2 font-bold text-amber-700">{stats.unassigned}</span>
+                        </div>
+                    </div>
+                    {(isAdmin || isTeacher) && (
+                        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                            setIsDialogOpen(open);
+                            if (!open) { setEditingStudent(null); setFormData(initialFormData); setExpandedFamily({}); }
+                        }}>
                         <DialogTrigger asChild>
                             <Button className="gradient-primary rounded-lg shadow-md" data-testid="add-student-btn">
                                 <Plus className="w-4 h-4 mr-2" /> Add Student
@@ -513,12 +544,38 @@ export default function StudentsPage() {
                         </DialogContent>
                     </Dialog>
                 )}
+                </div>
             </div>
 
-            {/* Search */}
-            <div className="relative mb-4 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Search students..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 h-10 rounded-lg" data-testid="student-search" />
+            {/* Search + class filter row */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-4 items-stretch sm:items-center">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search by name or student ID…"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 h-10 rounded-lg"
+                        data-testid="student-search"
+                    />
+                </div>
+                <div className="sm:w-56">
+                    <Select value={classFilter} onValueChange={setClassFilter}>
+                        <SelectTrigger className="h-10 rounded-lg" data-testid="student-class-filter">
+                            <SelectValue placeholder="Filter by class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Classes</SelectItem>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                            {classes.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="text-sm text-muted-foreground whitespace-nowrap" data-testid="student-result-count">
+                    {filteredStudents.length} of {students.length}
+                </div>
             </div>
 
             {/* Students Grid */}

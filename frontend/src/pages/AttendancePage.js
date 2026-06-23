@@ -69,8 +69,12 @@ export default function AttendancePage() {
             ]);
             setClasses(classesRes.data);
             setStudents(studentsRes.data);
-            
-            if (classesRes.data.length > 0) {
+
+            // Honor ?class=<id> from URL; otherwise default to first class
+            const fromUrl = searchParams.get('class');
+            if (fromUrl && classesRes.data.some((c) => c.id === fromUrl)) {
+                setSelectedClass(fromUrl);
+            } else if (!selectedClass && classesRes.data.length > 0) {
                 setSelectedClass(classesRes.data[0].id);
             }
         } catch (error) {
