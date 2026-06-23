@@ -24,6 +24,8 @@ import HealthPage from "./pages/HealthPage";
 import DisciplinePage from "./pages/DisciplinePage";
 import ReEnrollmentPage from "./pages/ReEnrollmentPage";
 import AuditLogPage from "./pages/AuditLogPage";
+import FormTeacherCommentsPage from "./pages/FormTeacherCommentsPage";
+import SocialSkillsManagerPage from "./pages/SocialSkillsManagerPage";
 import { Loader2 } from "lucide-react";
 
 // Listens to route changes and persists the path for the next login redirect
@@ -180,6 +182,22 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute allowedRoles={['superuser', 'admin', 'teacher']}>
                         <ReportsPage />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/report-manager/comments" 
+                element={
+                    <ProtectedRoute allowedRoles={['superuser', 'admin', 'teacher']}>
+                        <FormTeacherCommentsPage />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/report-manager/social-skills" 
+                element={
+                    <ProtectedRoute allowedRoles={['superuser', 'admin', 'teacher']}>
+                        <SocialSkillsManagerPage />
                     </ProtectedRoute>
                 } 
             />

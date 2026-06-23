@@ -36,6 +36,8 @@ import {
     History,
     PanelLeftClose,
     PanelLeftOpen,
+    MessageSquare,
+    Sparkles,
 } from 'lucide-react';
 
 const SIDEBAR_STORAGE_KEY = 'lumina_sidebar_open_groups';
@@ -80,7 +82,18 @@ const NAV_GROUPS = [
             { to: '/classes', label: 'Classes', icon: School, roles: ['superuser', 'admin', 'teacher'] },
             { to: '/attendance', label: 'Attendance', icon: CalendarCheck, roles: ['superuser', 'admin', 'teacher', 'parent'] },
             { to: '/gradebook', label: 'Gradebook', icon: BookOpen, roles: ['superuser', 'admin', 'teacher', 'parent'] },
-            { to: '/report-cards', label: 'Report Cards', icon: FileText, roles: ['superuser', 'admin', 'teacher'] },
+        ],
+    },
+    {
+        key: 'reports',
+        label: 'Report Manager',
+        icon: FileText,
+        items: [
+            { to: '/classes', label: 'Class List', icon: School, roles: ['superuser', 'admin', 'teacher'] },
+            { to: '/gradebook', label: 'Gradebook', icon: BookOpen, roles: ['superuser', 'admin', 'teacher'] },
+            { to: '/report-manager/comments', label: "Form Teacher's Comment", icon: MessageSquare, roles: ['superuser', 'admin', 'teacher'] },
+            { to: '/report-manager/social-skills', label: 'Social Skills', icon: Sparkles, roles: ['superuser', 'admin', 'teacher'] },
+            { to: '/reports', label: 'Term Report Generation', icon: FileText, roles: ['superuser', 'admin', 'teacher'] },
         ],
     },
     {

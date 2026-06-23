@@ -106,7 +106,7 @@ const resolveField = (field, data, classInfo, term, academicYear) => {
         'attendance.total_days': attendance_summary?.total_days,
         'attendance.present': attendance_summary?.present,
         'attendance.absent': attendance_summary?.absent,
-        'teacher_comment': student?.teacher_comment || '',
+        'teacher_comment': data?.teacher_comment || student?.teacher_comment || '',
         // Overall grade fields
         'grades.overall_score': grades?.overall_score?.toFixed(1) || '-',
         'grades.overall_grade': grades?.overall_grade || '-',
@@ -593,7 +593,7 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
                 <div className="mb-4">
                     <h3 className="text-sm font-bold p-1 mb-0" style={{ backgroundColor: headerBg, color: headerText }}>CLASS TEACHER'S COMMENTS</h3>
                     <div className="border border-gray-300 p-2 min-h-16 text-sm">
-                        {student?.teacher_comment || 'No comments recorded.'}
+                        {data?.teacher_comment || student?.teacher_comment || 'No comments recorded.'}
                     </div>
                 </div>
             )}

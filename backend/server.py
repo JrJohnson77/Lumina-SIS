@@ -356,6 +356,13 @@ class SocialSkillsEntry(BaseModel):
     academic_year: str
     skills: Dict[str, str] = {}  # skill_name -> rating (Excellent, Good, Satisfactory, Needs Improvement)
 
+# Teacher Comment Model (form teacher's comment per student per term)
+class TeacherCommentEntry(BaseModel):
+    student_id: str
+    term: str
+    academic_year: str
+    comment: str = ""
+
 # CSV Import Models
 class StudentCSVRow(BaseModel):
     student_id: Optional[str] = ""
@@ -1921,6 +1928,14 @@ async def get_student_report_card(
     
     student["age"] = calculate_age(student.get("date_of_birth", ""))
     
+    # Form teacher's comment for this term
+    comment_doc = await db.teacher_comments.find_one({
+        "student_id": student_id,
+        "term": term,
+        "academic_year": academic_year,
+        "school_code": current_user["school_code"]
+    }, {"_id": 0})
+    
     return {
         "student": student,
         "grades": gradebook or {},
@@ -1928,7 +1943,8 @@ async def get_student_report_card(
         "class_info": class_info,
         "term": term,
         "academic_year": academic_year,
-        "grading_scheme": GRADING_SCHEME
+        "grading_scheme": GRADING_SCHEME,
+        "teacher_comment": comment_doc.get("comment", "") if comment_doc else ""
     }
 
 @api_router.get("/report-cards/class/{class_id}")
@@ -1992,11 +2008,20 @@ async def get_class_report_cards(
             "school_code": current_user["school_code"]
         }, {"_id": 0})
         
+        # Get form teacher's comment
+        comment_doc = await db.teacher_comments.find_one({
+            "student_id": student["id"],
+            "term": term,
+            "academic_year": academic_year,
+            "school_code": current_user["school_code"]
+        }, {"_id": 0})
+        
         report_cards.append({
             "student": student,
             "grades": gradebook or {},
             "attendance_summary": attendance_summary,
-            "social_skills": social_skills.get("skills", {}) if social_skills else {}
+            "social_skills": social_skills.get("skills", {}) if social_skills else {},
+            "teacher_comment": comment_doc.get("comment", "") if comment_doc else ""
         })
     
     # Sort students alphabetically by LastName, FirstName MiddleName
@@ -2176,6 +2201,152 @@ async def get_social_skills(
     }, {"_id": 0})
     
     return entry or {"skills": {}}
+
+@api_router.get("/social-skills/class/{class_id}")
+async def get_class_social_skills(
+    class_id: str,
+    term: str,
+    academic_year: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Bulk fetch social-skills entries for every student in a class for a term."""
+    # Verify class belongs to current school
+    cls = await db.classes.find_one({
+        "id": class_id, "school_code": current_user["school_code"]
+    }, {"_id": 0})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    
+    students = await db.students.find(
+        {"class_id": class_id, "school_code": current_user["school_code"]},
+        {"_id": 0}
+    ).to_list(500)
+    
+    student_ids = [s["id"] for s in students]
+    entries = await db.social_skills.find({
+        "student_id": {"$in": student_ids},
+        "term": term,
+        "academic_year": academic_year,
+        "school_code": current_user["school_code"]
+    }, {"_id": 0}).to_list(1000)
+    
+    by_student = {e["student_id"]: e.get("skills", {}) for e in entries}
+    return {
+        "class_id": class_id,
+        "term": term,
+        "academic_year": academic_year,
+        "entries": [
+            {"student_id": s["id"], "skills": by_student.get(s["id"], {})}
+            for s in students
+        ],
+    }
+
+# ==================== TEACHER COMMENTS (Form Teacher's Comment) ====================
+
+@api_router.post("/teacher-comments")
+async def save_teacher_comment(
+    entry: TeacherCommentEntry,
+    current_user: dict = Depends(require_permission("manage_grades"))
+):
+    """Save (upsert) form-teacher comment for a student for a given term."""
+    # If teacher, ensure student belongs to one of their classes
+    if current_user["role"] == UserRole.TEACHER:
+        student = await db.students.find_one(
+            {"id": entry.student_id, "school_code": current_user["school_code"]},
+            {"_id": 0, "class_id": 1}
+        )
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        teacher_class_ids = await get_teacher_class_ids(current_user)
+        if student.get("class_id") not in teacher_class_ids:
+            raise HTTPException(status_code=403, detail="Student is not in your class")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    existing = await db.teacher_comments.find_one({
+        "student_id": entry.student_id,
+        "term": entry.term,
+        "academic_year": entry.academic_year,
+        "school_code": current_user["school_code"]
+    })
+    if existing:
+        await db.teacher_comments.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {
+                "comment": entry.comment,
+                "updated_at": now,
+                "updated_by": current_user["id"],
+            }}
+        )
+        return {"message": "Comment updated", "id": existing["id"]}
+    else:
+        doc = {
+            "id": str(uuid.uuid4()),
+            "student_id": entry.student_id,
+            "term": entry.term,
+            "academic_year": entry.academic_year,
+            "school_code": current_user["school_code"],
+            "comment": entry.comment,
+            "created_at": now,
+            "updated_at": now,
+            "created_by": current_user["id"],
+            "updated_by": current_user["id"],
+        }
+        await db.teacher_comments.insert_one(doc)
+        return {"message": "Comment saved", "id": doc["id"]}
+
+@api_router.get("/teacher-comments/class/{class_id}")
+async def get_class_teacher_comments(
+    class_id: str,
+    term: str,
+    academic_year: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Bulk fetch teacher comments for every student in a class."""
+    cls = await db.classes.find_one({
+        "id": class_id, "school_code": current_user["school_code"]
+    }, {"_id": 0})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+    
+    students = await db.students.find(
+        {"class_id": class_id, "school_code": current_user["school_code"]},
+        {"_id": 0}
+    ).to_list(500)
+    
+    student_ids = [s["id"] for s in students]
+    entries = await db.teacher_comments.find({
+        "student_id": {"$in": student_ids},
+        "term": term,
+        "academic_year": academic_year,
+        "school_code": current_user["school_code"]
+    }, {"_id": 0}).to_list(1000)
+    
+    by_student = {e["student_id"]: e.get("comment", "") for e in entries}
+    return {
+        "class_id": class_id,
+        "term": term,
+        "academic_year": academic_year,
+        "entries": [
+            {"student_id": s["id"], "comment": by_student.get(s["id"], "")}
+            for s in students
+        ],
+    }
+
+@api_router.get("/teacher-comments/{student_id}")
+async def get_student_teacher_comment(
+    student_id: str,
+    term: str,
+    academic_year: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Fetch the form-teacher comment for a student for a given term."""
+    entry = await db.teacher_comments.find_one({
+        "student_id": student_id,
+        "term": term,
+        "academic_year": academic_year,
+        "school_code": current_user["school_code"]
+    }, {"_id": 0})
+    return entry or {"comment": ""}
 
 # ==================== SIGNATURES (DEPRECATED - Use School Signatures Instead) ====================
 

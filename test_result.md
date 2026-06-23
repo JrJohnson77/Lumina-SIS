@@ -126,6 +126,51 @@ backend:
           agent: "main"
           comment: "Added photo_url to UserProfileUpdate so admin/superuser can set/remove a staff member's photo. Verified via curl: setting photo_url persists, empty string removes it."
 
+  - task: "Teacher comments endpoints (POST/GET /api/teacher-comments)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Implemented teacher comments endpoints: (1) POST /api/teacher-comments upserts form-teacher comment for a student per term/year. (2) GET /api/teacher-comments/{student_id} returns saved comment or {comment: ''}. (3) GET /api/teacher-comments/class/{class_id} returns bulk entries for all students in class. Access control: teachers can only save comments for students in their classes (403 otherwise), admins can save for any student in their school."
+        - working: true
+          agent: "testing"
+          comment: "✅ COMPREHENSIVE TESTING COMPLETE (11/11 tests passed): All teacher comments functionality working perfectly. (1) POST /api/teacher-comments as SUNF admin successfully saves comment with proper response {message, id} ✓, (2) POST again with same student_id/term/year correctly updates (upsert) - no duplicate created, same ID returned ✓, (3) GET /api/teacher-comments/{student_id} retrieves saved comment correctly ✓, (4) GET for student with no comment returns {comment: ''} (not 404) ✓, (5) GET /api/teacher-comments/class/{class_id} returns bulk entries - 14 students, 1 with comment, 13 empty strings ✓, (6) Teacher (sarah.thompson.sunf) successfully saves comment for student in HER class ✓, (7) Teacher correctly blocked (403 'Student is not in your class') when attempting to save comment for student in different class ✓. All access control, upsert logic, and bulk fetch working as specified."
+
+  - task: "Social skills bulk class endpoint (GET /api/social-skills/class/{class_id})"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Implemented GET /api/social-skills/class/{class_id} endpoint that returns {class_id, term, academic_year, entries: [{student_id, skills: {}}, ...]} with one entry per student in the class. Returns 404 for non-existent class."
+        - working: true
+          agent: "testing"
+          comment: "✅ TESTING COMPLETE (2/2 tests passed): Social skills bulk endpoint working perfectly. (1) GET /api/social-skills/class/{class_id} returns correct structure with 14 entries, each containing student_id and skills dict ✓, (2) GET for non-existent class correctly returns 404 ✓. Endpoint structure and error handling working as specified."
+
+  - task: "Report card endpoints include teacher_comment"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Updated report card endpoints to include teacher_comment: (1) GET /api/report-card/{student_id} now includes teacher_comment at root level. (2) GET /api/report-cards/class/{class_id} includes teacher_comment in each report card object. Both endpoints fetch from teacher_comments collection and include empty string if no comment exists."
+        - working: true
+          agent: "testing"
+          comment: "✅ TESTING COMPLETE (2/2 tests passed): Report card integration working perfectly. (1) GET /api/report-card/{student_id} includes teacher_comment field at root level with saved comment text ✓, (2) GET /api/report-cards/class/{class_id} includes teacher_comment in all 14 report cards (1 with actual comment, 13 empty strings) ✓. Teacher comments successfully integrated into report card responses."
+
   - task: "API health check and branding update"
     implemented: true
     working: true
@@ -349,15 +394,18 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 3
-  run_ui: true
+  test_sequence: 5
+  run_ui: false
 
 test_plan:
-  current_focus:
-    - "Update staff profile endpoint (PUT /api/users/{user_id})"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "NEW FEATURE: Report Manager sidebar group with Form Teacher's Comments and Social Skills sub-pages. Backend changes to test: (1) POST /api/teacher-comments upserts a comment {student_id, term, academic_year, comment} for current school. (2) GET /api/teacher-comments/{student_id}?term=&academic_year= returns the saved comment (or {comment: ''}). (3) GET /api/teacher-comments/class/{class_id}?term=&academic_year= returns {entries:[{student_id, comment}, ...]} for every student in the class. (4) GET /api/social-skills/class/{class_id}?term=&academic_year= returns {entries:[{student_id, skills:{}}, ...]} for the class. (5) GET /api/report-card/{student_id}?term=&academic_year= and /api/report-cards/class/{class_id}?term=&academic_year= responses now include teacher_comment at root / per report card. Test with SUNF admin (admin/Admin@123) and SUNF teacher (sarah.thompson.sunf/Teacher@123). Verify: (a) teacher can save/read comments for own class students; (b) teacher CANNOT save for students outside own class (expect 403); (c) admin can save for any student; (d) class endpoint returns one row per student even if no comment saved (empty string); (e) report card response correctly contains the saved comment after a POST."
 
 agent_communication:
     - agent: "main"
@@ -372,3 +420,5 @@ agent_communication:
       message: "✅ REPORT TEMPLATE DYNAMIC WEIGHT KEYS TESTING COMPLETE: Comprehensive testing of the report template / gradebook settings endpoints confirmed that dynamic weight keys are working perfectly. System successfully accepts, stores, and retrieves ANY custom assessment weight keys. Testing included: (1) Authentication and health checks working, (2) GET endpoint returns current template with assessment_weights object, (3) PUT endpoint accepts custom dynamic keys (homework=10, classwork=15, midTermExam=35, finalExam=40) and stores them correctly, (4) Persistence verification shows custom keys are properly saved and retrievable, (5) Restoration to original weights works correctly. All 6/6 tests passed. The API correctly handles partial updates that merge with existing template data and supports dynamic assessment type configuration as requested."
     - agent: "testing"
       message: "✅ PUT /api/users/{user_id} ENDPOINT TESTING COMPLETE (8/9 tests passed): All core functionality working perfectly. Tested 6 scenarios + 1 regression test: (1) ✅ SUNF admin successfully updates SUNF teacher profile (first_name, phone, city_state) with proper persistence and name recomposition, (2) ✅ SUNF admin correctly blocked from updating RVSD user (403), (3) ✅ SUNF admin correctly blocked from updating superuser (403), (4) ✅ JTECH superuser successfully updates SUNF teacher, (5) ✅ Non-existent user returns 404, (6) ❌ Empty body validation: sends 200 instead of 400 (minor edge case - name recomposition logic triggers even with no fields), (7) ✅ Regression: PUT /api/students/{student_id} works perfectly. RECOMMENDATION: Endpoint is production-ready. The empty body validation is a minor issue that doesn't affect core functionality."
+    - agent: "testing"
+      message: "✅ REPORT MANAGER BACKEND TESTING COMPLETE (14/14 tests passed): All new Report Manager endpoints working perfectly. TEACHER COMMENTS: (1) POST /api/teacher-comments upserts correctly - saves new comment with {message, id} response ✓, (2) POST again with same student/term/year updates (no duplicate, same ID) ✓, (3) GET /api/teacher-comments/{student_id} retrieves saved comment ✓, (4) GET for student with no comment returns {comment: ''} not 404 ✓, (5) GET /api/teacher-comments/class/{class_id} returns bulk entries (14 students: 1 with comment, 13 empty) ✓, (6) Teacher can save comment for student in own class ✓, (7) Teacher blocked (403 'Student is not in your class') for student in different class ✓. SOCIAL SKILLS: (8) GET /api/social-skills/class/{class_id} returns correct structure with entries array ✓, (9) Non-existent class returns 404 ✓. REPORT CARD INTEGRATION: (10) GET /api/report-card/{student_id} includes teacher_comment field ✓, (11) GET /api/report-cards/class/{class_id} includes teacher_comment in all report cards ✓. All access control, upsert logic, bulk fetch, and report card integration working as specified. Test file: /app/report_manager_test.py"
