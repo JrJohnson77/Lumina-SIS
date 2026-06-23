@@ -10,7 +10,7 @@ import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://repo-refresh-18.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://rebuild-lab-1.preview.emergentagent.com").rstrip("/")
 
 
 def _login(school_code: str, username: str, password: str) -> str:
