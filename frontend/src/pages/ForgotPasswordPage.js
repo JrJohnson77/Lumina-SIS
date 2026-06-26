@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Loader2, ArrowLeft, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
+import { AppFooter } from '../components/AppFooter';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -61,7 +62,8 @@ export default function ForgotPasswordPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-4" data-testid="forgot-password-page">
+        <div className="min-h-screen flex flex-col bg-background" data-testid="forgot-password-page">
+            <div className="flex-1 flex items-center justify-center p-4">
             <Card className="w-full max-w-md rounded-2xl shadow-xl">
                 <CardHeader>
                     <div className="flex items-center gap-3 mb-2">
@@ -155,6 +157,8 @@ export default function ForgotPasswordPage() {
                     </div>
                 </CardContent>
             </Card>
+            </div>
+            <AppFooter variant="auth" />
         </div>
     );
 }

@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { Toaster } from 'sonner';
+import { AppFooter } from './AppFooter';
 import {
     LayoutDashboard,
     Users,
@@ -501,6 +502,9 @@ export const Layout = ({ children }) => {
                 <main>
                     {children}
                 </main>
+
+                {/* App-wide footer */}
+                <AppFooter />
             </div>
         </div>
     );

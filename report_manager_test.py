@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any, Optional, List
 
 # API base URL from frontend configuration
-BASE_URL = "https://rebuild-lab-1.preview.emergentagent.com/api"
+BASE_URL = "https://github-refresh-4.preview.emergentagent.com/api"
 
 # Test credentials
 SUNF_ADMIN = {

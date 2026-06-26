@@ -26,6 +26,8 @@ import ReEnrollmentPage from "./pages/ReEnrollmentPage";
 import AuditLogPage from "./pages/AuditLogPage";
 import FormTeacherCommentsPage from "./pages/FormTeacherCommentsPage";
 import SocialSkillsManagerPage from "./pages/SocialSkillsManagerPage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
+import TermsOfUsePage from "./pages/TermsOfUsePage";
 import { Loader2 } from "lucide-react";
 
 // Listens to route changes and persists the path for the next login redirect
@@ -285,6 +287,8 @@ function AppRoutes() {
                 path="/reports" 
                 element={<Navigate to="/report-cards" replace />}
             />
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms" element={<TermsOfUsePage />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

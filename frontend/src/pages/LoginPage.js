@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { AppFooter } from '../components/AppFooter';
 import { Toaster, toast } from 'sonner';
 import { Building2, User, Lock, Loader2, ArrowRight } from 'lucide-react';
 
@@ -33,8 +34,9 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex">
+        <div className="min-h-screen flex flex-col">
             <Toaster position="top-right" richColors />
+            <div className="flex flex-1">
             
             {/* Left Panel — Dark branding */}
             <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden" style={{ background: 'hsl(215, 72%, 10%)' }}>
@@ -180,6 +182,8 @@ export default function LoginPage() {
                     </div>
                 </div>
             </div>
+            </div>
+            <AppFooter variant="auth" />
         </div>
     );
 }
