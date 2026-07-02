@@ -2145,10 +2145,14 @@ async def get_upload(filename: str):
         ".jpeg": "image/jpeg",
         ".png": "image/png",
         ".gif": "image/gif",
-        ".webp": "image/webp"
+        ".webp": "image/webp",
+        ".html": "text/html; charset=utf-8",
+        ".md":   "text/markdown; charset=utf-8",
+        ".pdf":  "application/pdf",
+        ".txt":  "text/plain; charset=utf-8",
     }
     content_type = content_types.get(ext, "application/octet-stream")
-    
+
     return FileResponse(file_path, media_type=content_type)
 
 # ==================== SOCIAL SKILLS ====================

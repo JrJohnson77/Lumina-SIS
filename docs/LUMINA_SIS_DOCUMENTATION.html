@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lumina-SIS · Comprehensive Documentation</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #0f172a;
+    line-height: 1.6;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    background: #ffffff;
+}
+h1, h2, h3, h4 { color: #0b1220; letter-spacing: -0.01em; }
+h1 { font-size: 34px; margin: 0 0 8px; border-bottom: 3px solid #4f46e5; padding-bottom: 12px; }
+h2 { font-size: 24px; margin-top: 40px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+h3 { font-size: 18px; margin-top: 28px; color: #1e293b; }
+h4 { font-size: 15px; margin-top: 20px; color: #334155; }
+p, li { font-size: 14.5px; }
+a { color: #4f46e5; text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+    background: #f1f5f9; padding: 2px 6px; border-radius: 4px;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.92em; color: #0f172a;
+}
+pre {
+    background: #0b1220; color: #e2e8f0; padding: 16px 20px;
+    border-radius: 10px; overflow-x: auto; font-size: 13px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+pre code { background: transparent; color: inherit; padding: 0; }
+table {
+    border-collapse: collapse; width: 100%; margin: 14px 0 24px;
+    background: #ffffff; border: 1px solid #e2e8f0; font-size: 13.5px;
+}
+th, td { border-bottom: 1px solid #e2e8f0; padding: 9px 12px; text-align: left; vertical-align: top; }
+th { background: #f8fafc; color: #0f172a; font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+blockquote {
+    border-left: 4px solid #4f46e5; margin: 16px 0;
+    padding: 8px 16px; background: #eef2ff; color: #312e81;
+    border-radius: 4px;
+}
+hr { border: none; border-top: 1px solid #e2e8f0; margin: 32px 0; }
+.doc-cover {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: #ffffff; padding: 48px; border-radius: 16px;
+    margin-bottom: 40px; box-shadow: 0 12px 32px rgba(79, 70, 229, 0.25);
+}
+.doc-cover h1 { color: #ffffff; border: none; margin: 0 0 16px; font-size: 44px; }
+.doc-cover p { margin: 6px 0; opacity: 0.95; }
+.doc-cover .meta { font-size: 13px; opacity: 0.8; margin-top: 20px; }
+.badge {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; margin-right: 6px;
+}
+.badge-blue { background: #dbeafe; color: #1e3a8a; }
+.badge-green { background: #dcfce7; color: #14532d; }
+.badge-red { background: #fee2e2; color: #7f1d1d; }
+@media print {
+    body { padding: 24px; max-width: 100%; }
+    pre { break-inside: avoid; }
+    h1, h2, h3 { break-after: avoid; }
+    .doc-cover { background: #4f46e5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    table { break-inside: auto; }
+    tr { break-inside: avoid; break-after: auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="doc-cover">
+  <h1>Lumina-SIS</h1>
+  <p style="font-size:18px;font-weight:500;">Comprehensive System Documentation</p>
+  <p>Multi-tenant Student Information System · Full-stack (FastAPI + React 19)</p>
+  <p class="meta">Version 1.0 &middot; July 2025 &middot; Auto-generated from source</p>
+</div>
+
+<h1 id="lumina-sis-comprehensive-system-documentation">Lumina-SIS — Comprehensive System Documentation</h1>
+<p><strong>Version:</strong> 1.0 (July 2025 rebuild)
+<strong>Project:</strong> Lumina-SIS (Student Information System) — Multi-tenant School Management Platform
+<strong>Repository:</strong> <code>github.com/JrJohnson77/Lumina-SIS</code>
+<strong>Prepared:</strong> Auto-generated from source code and PRD</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#1-executive-summary">Executive Summary</a></li>
+<li><a href="#2-system-architecture">System Architecture</a></li>
+<li><a href="#3-technology-stack">Technology Stack</a></li>
+<li><a href="#4-feature-catalog">Feature Catalog</a></li>
+<li><a href="#5-user-roles--permissions">User Roles &amp; Permissions</a></li>
+<li><a href="#6-data-model-mongodb-collections">Data Model (MongoDB Collections)</a></li>
+<li><a href="#7-api-reference">API Reference (104 endpoints)</a></li>
+<li><a href="#8-frontend-pages--routes">Frontend Pages &amp; Routes</a></li>
+<li><a href="#9-authentication--session-management">Authentication &amp; Session Management</a></li>
+<li><a href="#10-multi-tenancy-design">Multi-tenancy Design</a></li>
+<li><a href="#11-report-card-system">Report Card System (Canvas Designer + Renderer)</a></li>
+<li><a href="#12-grading--assessment">Grading &amp; Assessment</a></li>
+<li><a href="#13-password-reset--email">Password Reset &amp; Email</a></li>
+<li><a href="#14-audit-log">Audit Log</a></li>
+<li><a href="#15-file-uploads--storage">File Uploads &amp; Storage</a></li>
+<li><a href="#16-security-policies-implemented">Security Policies (What Is Implemented)</a></li>
+<li><a href="#17-security-risks--known-vulnerabilities">Security Risks &amp; Known Vulnerabilities</a></li>
+<li><a href="#18-recommendations-for-improvements">Recommendations for Improvements</a></li>
+<li><a href="#19-deployment--operations">Deployment &amp; Operations</a></li>
+<li><a href="#20-test-credentials">Test Credentials</a></li>
+<li><a href="#21-appendix-environment-variables">Appendix: Environment Variables</a></li>
+<li><a href="#22-appendix-ground-truth-metrics">Appendix: Ground-truth Metrics</a></li>
+</ol>
+<hr />
+<h2 id="1-executive-summary">1. Executive Summary</h2>
+<p><strong>Lumina-SIS</strong> is a multi-tenant Student Information System designed for primary/secondary schools. It provides a single web platform that combines student records, class rostering, attendance, gradebook, report-card generation (with a canvas-based WYSIWYG designer), admissions, health records, discipline tracking, re-enrollment/promotion, staff/user management, CSV import-export, audit logging, and password reset via email.</p>
+<p><strong>Design pillars</strong></p>
+<ul>
+<li><strong>Multi-tenant by school_code</strong> — every tenant is isolated by an uppercase <code>school_code</code>; a "Superuser" account (<code>JTECH</code>) can hop between schools.</li>
+<li><strong>JWT-based auth</strong> with role-based (RBAC) and permission-based (per-user) authorization.</li>
+<li><strong>Report cards are first-class</strong>: schools get a polished default template (<code>lumina_default</code>) and can optionally build fully custom canvas layouts with pixel-precise WYSIWYG positioning.</li>
+<li><strong>Auditable</strong>: privileged mutations (locks, unlocks, deletes, promotions, report-card sends) write to an <code>audit_logs</code> collection.</li>
+<li><strong>Zero-friction defaults</strong>: a startup task creates the <code>JTECH</code> superuser + school and migrates any legacy templates to the new default.</li>
+</ul>
+<p><strong>Scale of the current codebase</strong></p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th style="text-align: right;">Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backend endpoints (<code>/api/*</code>)</td>
+<td style="text-align: right;"><strong>104</strong></td>
+</tr>
+<tr>
+<td>Backend LoC (<code>server.py</code>)</td>
+<td style="text-align: right;"><strong>4,015</strong></td>
+</tr>
+<tr>
+<td>Frontend LoC (<code>src/pages</code> + <code>components</code>)</td>
+<td style="text-align: right;"><strong>~13,700</strong></td>
+</tr>
+<tr>
+<td>Frontend pages</td>
+<td style="text-align: right;"><strong>25</strong></td>
+</tr>
+<tr>
+<td>React protected routes</td>
+<td style="text-align: right;"><strong>24</strong></td>
+</tr>
+<tr>
+<td>MongoDB collections</td>
+<td style="text-align: right;"><strong>14+</strong></td>
+</tr>
+<tr>
+<td>Report-card design modes</td>
+<td style="text-align: right;">2 (<code>lumina_default</code>, <code>canvas</code>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-system-architecture">2. System Architecture</h2>
+<pre><code>┌─────────────────────┐         ┌──────────────────────────┐         ┌──────────────┐
+│   Browser (React)   │◀──HTTPS─▶  Kubernetes Ingress      │──/api──▶│  FastAPI 8001│
+│  CRA / craco + TW3  │         │  (path routing /api → 8001,        │  (uvicorn)   │
+│  react-router v7    │         │   everything else → 3000)          └──────┬───────┘
+└─────────────────────┘         └──────────────────────────┘                │
+                                                                             ▼
+                                                                    ┌───────────────┐
+                                                                    │ MongoDB 4.x   │
+                                                                    │ (motor async) │
+                                                                    └───────────────┘
+                                                                             ▲
+                                                                             │
+                                                     ┌──────────────────┐    │
+                                                     │  Resend (email)  │    │
+                                                     │  Optional        │    │
+                                                     └──────────────────┘    │
+                                                                             │
+                                                     ┌──────────────────┐    │
+                                                     │  Uploads folder  │◀───┘
+                                                     │  /backend/uploads│  photos/backgrounds
+                                                     └──────────────────┘
+</code></pre>
+<p><strong>Request flow</strong></p>
+<ol>
+<li>React client stores JWT in <code>localStorage.token</code> and attaches it as <code>Authorization: Bearer …</code> on every axios call.</li>
+<li>FastAPI reads the JWT via <code>HTTPBearer</code>, decodes with <code>JWT_SECRET</code>, and loads the user from <code>db.users</code>.</li>
+<li>Every endpoint hides behind either <code>require_roles([...])</code>, <code>require_permission(...)</code>, or <code>require_superuser()</code>. Superuser bypasses every role check.</li>
+<li>Almost every query is scoped by <code>school_code</code> (multi-tenant isolation).</li>
+<li>Ingress guarantees <code>/api/*</code> → backend, everything else → CRA dev server. Frontend uses <code>REACT_APP_BACKEND_URL</code> — never hard-coded.</li>
+</ol>
+<hr />
+<h2 id="3-technology-stack">3. Technology Stack</h2>
+<h3 id="backend">Backend</h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Choice</th>
+<th>Version (pinned in <code>requirements.txt</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Framework</td>
+<td><strong>FastAPI</strong></td>
+<td>0.110.1</td>
+</tr>
+<tr>
+<td>ASGI Server</td>
+<td><strong>uvicorn</strong></td>
+<td>0.25.0</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td><strong>PyJWT</strong> + <strong>bcrypt</strong></td>
+<td>2.10.1 / 4.0.1</td>
+</tr>
+<tr>
+<td>DB Driver</td>
+<td><strong>motor</strong> (async pymongo)</td>
+<td>3.3.1</td>
+</tr>
+<tr>
+<td>DB</td>
+<td><strong>MongoDB</strong></td>
+<td>local (via <code>MONGO_URL</code>)</td>
+</tr>
+<tr>
+<td>Email</td>
+<td><strong>resend</strong></td>
+<td>≥2.0.0</td>
+</tr>
+<tr>
+<td>Validation</td>
+<td><strong>pydantic</strong></td>
+<td>2.12.5</td>
+</tr>
+<tr>
+<td>PDF / Fonts</td>
+<td><strong>fpdf2</strong>, <strong>fonttools</strong></td>
+<td>2.8.6 / 4.61.1</td>
+</tr>
+<tr>
+<td>CSV</td>
+<td>stdlib <code>csv</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="frontend">Frontend</h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Choice</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Framework</td>
+<td><strong>React</strong></td>
+<td>19.0</td>
+</tr>
+<tr>
+<td>Build</td>
+<td><strong>CRA + craco</strong></td>
+<td>react-scripts 5.0.1</td>
+</tr>
+<tr>
+<td>Router</td>
+<td><strong>react-router-dom</strong></td>
+<td>7.5.1</td>
+</tr>
+<tr>
+<td>HTTP</td>
+<td><strong>axios</strong></td>
+<td>1.8.4</td>
+</tr>
+<tr>
+<td>UI Kit</td>
+<td><strong>shadcn/ui</strong> on top of Radix UI + Tailwind 3.4</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Icons</td>
+<td><strong>lucide-react</strong></td>
+<td>0.507</td>
+</tr>
+<tr>
+<td>Forms</td>
+<td><strong>react-hook-form</strong> + <strong>zod</strong></td>
+<td>7.56 / 3.24</td>
+</tr>
+<tr>
+<td>DnD</td>
+<td><strong>@dnd-kit</strong> (canvas designer)</td>
+<td>6.3</td>
+</tr>
+<tr>
+<td>PDF export</td>
+<td><strong>jspdf</strong> + <strong>html2canvas</strong></td>
+<td>4.2 / 1.4</td>
+</tr>
+<tr>
+<td>Charts</td>
+<td><strong>recharts</strong></td>
+<td>3.6</td>
+</tr>
+<tr>
+<td>Toasts</td>
+<td><strong>sonner</strong></td>
+<td>2.0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="infra">Infra</h3>
+<ul>
+<li><strong>Supervisord</strong> — process manager for <code>backend</code>, <code>frontend</code>, <code>mongodb</code>, <code>code-server</code>, <code>nginx-code-proxy</code>.</li>
+<li><strong>Kubernetes ingress</strong> — routes <code>/api/*</code> to the backend on port 8001, everything else to the frontend on port 3000.</li>
+</ul>
+<hr />
+<h2 id="4-feature-catalog">4. Feature Catalog</h2>
+<h3 id="41-authentication-session">4.1 Authentication &amp; Session</h3>
+<ul>
+<li>School-code + username + password login (<code>POST /api/auth/login</code>).</li>
+<li>JWT (<code>HS256</code>, 24-hour TTL) with <code>sub</code> (user id), <code>role</code>, and <code>school_code</code> claims.</li>
+<li>Superuser can log into any school by supplying that school's <code>school_code</code> at login.</li>
+<li><strong>Forgot-password</strong> flow (<code>POST /api/auth/forgot-password</code> + <code>POST /api/auth/reset-password</code>) with one-hour token TTL, Resend email delivery, log-fallback, and account-enumeration-safe responses.</li>
+<li>Frontend axios interceptor detects any 401 (except during login) and pops a <strong>session-expired modal</strong> rather than silently signing users out.</li>
+<li><code>SessionExpiredModal</code> + <code>RouteWatcher</code> restore the last-visited page on next login.</li>
+</ul>
+<h3 id="42-school-management-superuser">4.2 School Management (superuser)</h3>
+<ul>
+<li>Create/read/update/delete schools (<code>/api/schools</code>).</li>
+<li>Per-school <code>school_code</code> (uppercase), name, address, email, logo, principal/teacher signatures, <code>attendance_threshold</code> (default 85%), academic years list, per-school subjects list.</li>
+<li>Toggle &amp; set-current academic year (<code>/api/schools/{id}/academic-years/*</code>).</li>
+<li>Upload signature images (<code>/api/schools/{id}/signatures/upload</code>).</li>
+<li>Auto-seeds default subjects, default academic years, and a default <code>lumina_default</code> report template on school creation.</li>
+</ul>
+<h3 id="43-users-staff-rbac">4.3 Users, Staff &amp; RBAC</h3>
+<ul>
+<li>Roles: <code>superuser</code>, <code>admin</code>, <code>teacher</code>, <code>parent</code>.</li>
+<li>Permission strings: <code>manage_schools</code>, <code>manage_users</code>, <code>manage_students</code>, <code>manage_classes</code>, <code>manage_attendance</code>, <code>manage_grades</code>, <code>view_reports</code>, <code>generate_reports</code>.</li>
+<li>Admins inherit "all permissions minus <code>manage_schools</code>".</li>
+<li>Teachers get: <code>manage_students</code>, <code>manage_classes</code>, <code>manage_attendance</code>, <code>manage_grades</code>, <code>view_reports</code>, <code>generate_reports</code>.</li>
+<li>Parents get: <code>view_reports</code>.</li>
+<li>Extended profile: salutation, first/middle/last, gender, address, phones, email, photo.</li>
+<li>Admin can reset a user's username/password (<code>PUT /api/users/{id}/credentials</code>).</li>
+</ul>
+<h3 id="44-students">4.4 Students</h3>
+<ul>
+<li>Full demographic + house + emergency contact + family members (parents, guardians, siblings) with per-member phones/emails.</li>
+<li><code>enrollment_status</code>: <code>enrolled</code>, <code>retained</code>, <code>graduated</code>, <code>withdrawn</code>.</li>
+<li>Auto age from <code>date_of_birth</code>.</li>
+<li>Photo upload (<code>/api/upload/photo</code>).</li>
+<li>Attendance summary per month (<code>/api/students/{id}/attendance/summary</code>).</li>
+<li>School-scoped for admins; teachers see only students in their classes.</li>
+</ul>
+<h3 id="45-classes">4.5 Classes</h3>
+<ul>
+<li>Grade level, room, teacher assignment, academic year, <code>created_by</code>.</li>
+<li>Teachers see classes they teach or created.</li>
+</ul>
+<h3 id="46-attendance">4.6 Attendance</h3>
+<ul>
+<li>Statuses: Present / Absent / Late / Excused.</li>
+<li>Single-record <code>POST /attendance</code> and bulk <code>POST /attendance/bulk</code>.</li>
+<li>Filters by student, class, date-range on <code>GET /attendance</code>.</li>
+<li>Per-student summary + presence % for a month.</li>
+</ul>
+<h3 id="47-gradebook-mhps-assessment">4.7 Gradebook &amp; MHPS Assessment</h3>
+<ul>
+<li><strong>10 default subjects</strong> (English, Math, Science, Social Studies, Religious Ed, PE, Creative Arts, Music, ICT, French) — 4 marked as <code>is_core</code> for average/ranking.</li>
+<li><strong>Weighted assessment</strong>: HW 5% / GW 5% / Project 10% / Quiz 10% / Mid-Term 30% / End-of-Term 40%.</li>
+<li><strong>11-band grade scale</strong> (A+, A, A-, B, B-, C, C-, D, D-, E, U) with a per-band <strong>domain</strong> description and GPA points.</li>
+<li>Auto-calculates weighted score, letter grade, GPA points, domain.</li>
+<li><strong>Lock/Unlock</strong> gradebook entries (<code>POST /gradebook/{id}/lock</code> etc.) with audit trail.</li>
+<li><strong>Grade distribution</strong> endpoint (<code>GET /gradebook/{class}/distribution</code>) — buckets A/B/C/D/E/U for charts.</li>
+</ul>
+<h3 id="48-social-skills">4.8 Social Skills</h3>
+<ul>
+<li>4-band rating scale: Excellent / Good / Satisfactory / Needs Improvement (labels + short codes).</li>
+<li>Default categories:</li>
+<li><strong>Work &amp; Personal Ethics</strong>: Completes Assignments, Follows Instructions, Punctuality, Deportment, Courteous, Class Participation.</li>
+<li><strong>Respect</strong>: Respect for Teacher, Respect for Peers.</li>
+<li>Per-student, per-term entries. Class-wide fetch endpoint for bulk entry pages.</li>
+</ul>
+<h3 id="49-form-teachers-comment">4.9 Form Teacher's Comment</h3>
+<ul>
+<li>One comment per student per term/year (<code>POST /teacher-comments</code>).</li>
+<li>Class-wide fetch for the Report Manager UI.</li>
+</ul>
+<h3 id="410-report-cards-designer">4.10 Report Cards &amp; Designer</h3>
+<p>See §11 for the full designer specification. Highlights:</p>
+<ul>
+<li>Two design modes:</li>
+<li><code>lumina_default</code> — polished pre-built React template (<code>LuminaDefaultReportCard.jsx</code>) auto-assigned to every school.</li>
+<li><code>canvas</code> — full pixel-precise WYSIWYG editor (drag, resize, snap-to-grid, alignment guides, undo, copy/paste, zoom/pan, background image upload).</li>
+<li><strong>PDF filename</strong>: single-student → <code>[LastName]_[FirstName]_ReportCard_[Term]_[AcademicYear].pdf</code>; class batch → <code>[ClassName]_[Term]_[Year].pdf</code>.</li>
+<li><strong>Report Card Locks</strong> (<code>POST/DELETE /report-cards/{student_id}/lock</code>) — protect finalized reports from re-generation, audited.</li>
+<li><strong>Report Card Send</strong> (<code>POST /report-cards/send</code>) — bulk email guardians via Resend.</li>
+</ul>
+<h3 id="411-admissions">4.11 Admissions</h3>
+<ul>
+<li>Status lifecycle: <code>inquiry</code> → <code>application</code> → <code>pending</code> → <code>accepted</code> / <code>rejected</code>.</li>
+<li>Convert an accepted admission into a full student record (<code>POST /admissions/{id}/convert</code>).</li>
+<li>Stats endpoint aggregates totals per bucket.</li>
+</ul>
+<h3 id="412-health-records">4.12 Health Records</h3>
+<ul>
+<li>Sub-collections per student: vaccinations, allergies, conditions, medications, visits.</li>
+<li>Per-entry CRUD (<code>POST /health/{sid}/vaccination</code>, <code>.../allergy</code>, <code>.../condition</code>, <code>.../medication</code>, <code>.../visit</code>) and <code>DELETE /health/{sid}/{entry_type}/{entry_id}</code>.</li>
+<li>Aggregated <code>/health/stats</code> for the dashboard.</li>
+</ul>
+<h3 id="413-discipline">4.13 Discipline</h3>
+<ul>
+<li>Incident lifecycle: Open → In Progress → Resolved.</li>
+<li>Types: Minor / Moderate / Major.</li>
+<li>Teachers can only file incidents for students in their classes.</li>
+<li>Delete is admin-only; audit-logged.</li>
+</ul>
+<h3 id="414-re-enrollment-promotion">4.14 Re-Enrollment / Promotion</h3>
+<ul>
+<li>Preview endpoint suggests promotion targets based on numeric grade extraction (<code>Grade 3 → Grade 4</code>).</li>
+<li>Bulk-execute (promote / retain / graduate / withdraw / no-change), updating <code>class_id</code> and <code>enrollment_status</code> and logging an <code>enrollment_runs</code> row.</li>
+</ul>
+<h3 id="415-import-export">4.15 Import / Export</h3>
+<ul>
+<li>CSV import for students (<code>/api/import/students</code>) and teachers (<code>/api/import/teachers</code>).</li>
+<li>CSV templates: <code>/api/export/students-template</code> and <code>/api/export/teachers-template</code>.</li>
+</ul>
+<h3 id="416-audit-log">4.16 Audit Log</h3>
+<ul>
+<li>Every privileged mutation calls <code>write_audit(...)</code>; the module is best-effort and never crashes the parent op.</li>
+<li><code>GET /api/audit-logs</code> supports filters <code>entity_type</code>, <code>entity_id</code>, <code>actor_id</code>, <code>limit ≤ 1000</code>. Superuser/Admin only.</li>
+<li>Sorted by <code>created_at desc</code>.</li>
+</ul>
+<h3 id="417-file-uploads">4.17 File Uploads</h3>
+<ul>
+<li>Photos and template backgrounds: <code>POST /api/upload/photo</code>, <code>POST /api/upload/template-background</code>.</li>
+<li>Served back via <code>GET /api/uploads/{filename}</code>.</li>
+<li>Files stored on disk under <code>/app/backend/uploads/</code> — <strong>not</strong> in cloud storage.</li>
+</ul>
+<h3 id="418-dashboard-stats">4.18 Dashboard Stats</h3>
+<ul>
+<li><code>GET /api/stats/dashboard</code> returns tenant-scoped counters (students, classes, users, teachers, attendance today, admissions, health, discipline).</li>
+</ul>
+<hr />
+<h2 id="5-user-roles-permissions">5. User Roles &amp; Permissions</h2>
+<h3 id="51-role-matrix">5.1 Role Matrix</h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th style="text-align: center;">Superuser</th>
+<th style="text-align: center;">Admin</th>
+<th style="text-align: center;">Teacher</th>
+<th style="text-align: center;">Parent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cross-school access</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Manage schools</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Manage users</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own school)</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Reset user credentials</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own school)</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Manage students</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own classes)</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Manage classes</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own classes)</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Take attendance</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own classes)</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Manage grades</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own classes)</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Lock gradebook</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own classes)</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Unlock gradebook</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Report-card lock</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Report-card send</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own class)</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Report designer</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Admissions</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Health records</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own classes)</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Discipline</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅ (own classes)</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Re-enrollment</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Audit log</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>Import/export CSV</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr>
+<td>View reports</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-enforcement-points">5.2 Enforcement Points</h3>
+<p>Three dependency helpers in <code>server.py</code>:</p>
+<ul>
+<li><code>require_roles([...])</code> — superuser bypasses, else the role must be in the list.</li>
+<li><code>require_permission(perm)</code> — superuser bypasses, else <code>perm</code> must be in the user's <code>permissions[]</code>.</li>
+<li><code>require_superuser()</code> — hard-lock to <code>superuser</code>.</li>
+</ul>
+<p>Plus contextual class-scoping helpers:</p>
+<ul>
+<li><code>get_teacher_class_ids(user)</code> and <code>get_teacher_student_ids(user)</code> restrict list/get endpoints for teachers.</li>
+<li><code>_ensure_student_in_school</code>, <code>_ensure_teacher_can_access_student</code> guard nested student endpoints.</li>
+<li><code>assert_school_tenant(id, user)</code> for cross-tenant checks on school-scoped resources.</li>
+</ul>
+<hr />
+<h2 id="6-data-model-mongodb-collections">6. Data Model (MongoDB Collections)</h2>
+<p>All documents use <strong>string UUIDs</strong> (via <code>uuid.uuid4()</code>) — the MongoDB <code>_id</code> is projected out of every read (<code>{"_id": 0}</code>) to keep responses JSON-friendly.</p>
+<table>
+<thead>
+<tr>
+<th>Collection</th>
+<th>Purpose</th>
+<th>Key fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>schools</code></td>
+<td>Tenants</td>
+<td><code>id</code>, <code>school_code</code> (UPPER), <code>name</code>, <code>academic_years</code>, <code>subjects</code>, <code>principal_signature</code>, <code>teacher_signature</code>, <code>attendance_threshold</code>, <code>is_active</code></td>
+</tr>
+<tr>
+<td><code>users</code></td>
+<td>All accounts</td>
+<td><code>id</code>, <code>username</code>, <code>school_code</code>, <code>role</code>, <code>permissions</code>, <code>password_hash</code> (bcrypt), <code>photo_url</code>, extended profile</td>
+</tr>
+<tr>
+<td><code>students</code></td>
+<td>Enrolled learners</td>
+<td><code>id</code>, <code>school_code</code>, <code>class_id</code>, <code>student_id</code>, <code>first/middle/last_name</code>, <code>date_of_birth</code>, <code>gender</code>, <code>house</code>, <code>family_members[]</code>, <code>enrollment_status</code>, <code>age</code>, <code>photo_url</code></td>
+</tr>
+<tr>
+<td><code>classes</code></td>
+<td>Rosters</td>
+<td><code>id</code>, <code>school_code</code>, <code>name</code>, <code>grade_level</code>, <code>teacher_id</code>, <code>academic_year</code>, <code>created_by</code></td>
+</tr>
+<tr>
+<td><code>attendance</code></td>
+<td>Daily marks</td>
+<td><code>id</code>, <code>school_code</code>, <code>student_id</code>, <code>class_id</code>, <code>date</code>, <code>status</code>, <code>marked_by</code></td>
+</tr>
+<tr>
+<td><code>gradebook</code></td>
+<td>Per-term entries</td>
+<td><code>id</code>, <code>school_code</code>, <code>student_id</code>, <code>class_id</code>, <code>term</code>, <code>academic_year</code>, <code>subjects[]</code> (weighted components), <code>overall_score</code>, <code>overall_grade</code>, <code>is_locked</code></td>
+</tr>
+<tr>
+<td><code>social_skills</code></td>
+<td>Per-term ratings</td>
+<td><code>student_id</code>, <code>school_code</code>, <code>term</code>, <code>academic_year</code>, <code>skills{}</code></td>
+</tr>
+<tr>
+<td><code>teacher_comments</code></td>
+<td>Form-teacher comments</td>
+<td><code>student_id</code>, <code>school_code</code>, <code>term</code>, <code>academic_year</code>, <code>comment</code></td>
+</tr>
+<tr>
+<td><code>report_templates</code></td>
+<td>Per-school template</td>
+<td><code>school_code</code>, <code>design_mode</code>, <code>canvas_elements[]</code>, <code>background_url</code>, <code>subjects[]</code>, <code>grade_scale[]</code>, <code>achievement_standards[]</code>, <code>sections{}</code>, <code>is_locked_default</code></td>
+</tr>
+<tr>
+<td><code>report_card_locks</code></td>
+<td>Finalized-report locks</td>
+<td><code>student_id</code>, <code>school_code</code>, <code>term</code>, <code>academic_year</code>, <code>locked_at</code>, <code>locked_by</code></td>
+</tr>
+<tr>
+<td><code>admissions</code></td>
+<td>Inquiry/applications</td>
+<td><code>id</code>, <code>school_code</code>, <code>status</code>, guardians, contact info</td>
+</tr>
+<tr>
+<td><code>health_records</code></td>
+<td>Per-student wellness</td>
+<td><code>student_id</code>, <code>school_code</code>, <code>vaccinations[]</code>, <code>allergies[]</code>, <code>conditions[]</code>, <code>medications[]</code>, <code>visits[]</code></td>
+</tr>
+<tr>
+<td><code>discipline_incidents</code></td>
+<td>Behavior log</td>
+<td><code>id</code>, <code>school_code</code>, <code>student_id</code>, <code>type</code>, <code>status</code>, <code>date</code>, <code>reported_by</code>, <code>reported_by_name</code></td>
+</tr>
+<tr>
+<td><code>enrollment_runs</code></td>
+<td>Promotion history</td>
+<td><code>id</code>, <code>school_code</code>, <code>from_year</code>, <code>to_year</code>, <code>counts{}</code>, <code>executed_by</code></td>
+</tr>
+<tr>
+<td><code>audit_logs</code></td>
+<td>Immutable trail</td>
+<td><code>id</code>, <code>school_code</code>, <code>actor_id/name/role</code>, <code>action</code>, <code>entity_type</code>, <code>entity_id</code>, <code>entity_label</code>, <code>details{}</code>, <code>created_at</code></td>
+</tr>
+<tr>
+<td><code>password_resets</code></td>
+<td>Token store</td>
+<td><code>token</code>, <code>user_id</code>, <code>school_code</code>, <code>expires_at</code>, <code>used</code></td>
+</tr>
+</tbody>
+</table>
+<p>Startup migrations idempotently flip legacy templates to <code>design_mode='lumina_default'</code> and pre-create the <code>JTECH</code> school + superuser.</p>
+<hr />
+<h2 id="7-api-reference">7. API Reference</h2>
+<p><strong>Total endpoints: 104.</strong> All are prefixed with <code>/api</code>. Below is the complete inventory grouped by module. Every mutation requires JWT; role/permission gates are noted per group.</p>
+<h3 id="71-auth-apiauth-public-jwt">7.1 Auth (<code>/api/auth</code>) — Public + JWT</h3>
+<ul>
+<li><code>POST /auth/login</code> — school-code login, returns JWT + user.</li>
+<li><code>GET  /auth/me</code> — return current user (JWT required).</li>
+<li><code>POST /auth/forgot-password</code> — issue reset token (always 200; log-only if no email).</li>
+<li><code>POST /auth/reset-password</code> — exchange token for new password (≥8 chars).</li>
+</ul>
+<h3 id="72-schools-apischools-superuser-listcrud-tenant-guard">7.2 Schools (<code>/api/schools</code>) — Superuser (list/CRUD) + tenant guard</h3>
+<ul>
+<li><code>POST /schools</code></li>
+<li><code>GET  /schools</code></li>
+<li><code>GET  /schools/{id}</code></li>
+<li><code>PUT  /schools/{id}</code></li>
+<li><code>DELETE /schools/{id}</code></li>
+<li><code>POST /schools/{id}/academic-years</code></li>
+<li><code>PUT  /schools/{id}/academic-years/{year}/toggle</code></li>
+<li><code>PUT  /schools/{id}/academic-years/{year}/set-current</code></li>
+<li><code>POST /schools/{id}/signatures/upload</code></li>
+<li><code>GET  /schools/{id}/signatures</code></li>
+<li><code>GET  /schools/{id}/subjects</code></li>
+<li><code>PUT  /schools/{id}/subjects</code></li>
+<li><code>POST /schools/{id}/subjects</code></li>
+<li><code>DELETE /schools/{id}/subjects/{subject_name}</code></li>
+</ul>
+<h3 id="73-report-templates-apireport-templates-admin">7.3 Report Templates (<code>/api/report-templates</code>) — Admin</h3>
+<ul>
+<li><code>GET /report-templates/{school_code}</code></li>
+<li><code>PUT /report-templates/{school_code}</code></li>
+<li><code>POST /report-templates/{school_code}/reset-default</code></li>
+</ul>
+<h3 id="74-users-apiusers-admin">7.4 Users (<code>/api/users</code>) — Admin</h3>
+<ul>
+<li><code>GET  /users</code></li>
+<li><code>GET  /users/{id}</code></li>
+<li><code>POST /users</code></li>
+<li><code>PUT  /users/{id}</code></li>
+<li><code>PUT  /users/{id}/role</code></li>
+<li><code>PUT  /users/{id}/credentials</code></li>
+<li><code>DELETE /users/{id}</code></li>
+</ul>
+<h3 id="75-students-apistudents-auth">7.5 Students (<code>/api/students</code>) — Auth</h3>
+<ul>
+<li><code>GET  /students</code></li>
+<li><code>GET  /students/{id}</code></li>
+<li><code>POST /students</code></li>
+<li><code>PUT  /students/{id}</code></li>
+<li><code>DELETE /students/{id}</code></li>
+<li><code>GET  /students/{id}/attendance/summary?month=YYYY-MM</code></li>
+</ul>
+<h3 id="76-classes-apiclasses-adminteacher">7.6 Classes (<code>/api/classes</code>) — Admin/Teacher</h3>
+<ul>
+<li><code>GET  /classes</code></li>
+<li><code>GET  /classes/{id}</code></li>
+<li><code>POST /classes</code></li>
+<li><code>PUT  /classes/{id}</code></li>
+<li><code>DELETE /classes/{id}</code></li>
+</ul>
+<h3 id="77-attendance-apiattendance-permission-manage_attendance">7.7 Attendance (<code>/api/attendance</code>) — permission <code>manage_attendance</code></h3>
+<ul>
+<li><code>GET  /attendance</code> (filters: <code>student_id</code>, <code>class_id</code>, <code>date_from</code>, <code>date_to</code>)</li>
+<li><code>POST /attendance</code></li>
+<li><code>POST /attendance/bulk</code></li>
+</ul>
+<h3 id="78-gradebook-apigradebook-permission-manage_grades">7.8 Gradebook (<code>/api/gradebook</code>) — permission <code>manage_grades</code></h3>
+<ul>
+<li><code>GET  /gradebook</code></li>
+<li><code>POST /gradebook</code></li>
+<li><code>DELETE /gradebook/{id}</code></li>
+<li><code>POST /gradebook/{id}/lock</code> (admin/teacher)</li>
+<li><code>POST /gradebook/{id}/unlock</code> (admin only)</li>
+<li><code>GET  /gradebook/{class_id}/distribution?term=&amp;academic_year=</code></li>
+</ul>
+<h3 id="79-report-cards-apireport-card-and-apireport-cards">7.9 Report Cards (<code>/api/report-card</code> and <code>/api/report-cards</code>)</h3>
+<ul>
+<li><code>GET  /report-card/{student_id}?term=&amp;academic_year=</code> — build data payload for a student.</li>
+<li><code>GET  /report-cards/class/{class_id}?term=&amp;academic_year=</code> — batch data.</li>
+<li><code>POST /report-cards/{student_id}/lock</code> (admin) — lock report card.</li>
+<li><code>DELETE /report-cards/{student_id}/lock</code> (admin) — unlock.</li>
+<li><code>GET  /report-cards/locks?term=&amp;academic_year=</code> — list locks.</li>
+<li><code>POST /report-cards/send</code> — bulk email guardians via Resend.</li>
+</ul>
+<h3 id="710-reference-data">7.10 Reference data</h3>
+<ul>
+<li><code>GET /subjects</code></li>
+<li><code>GET /houses</code></li>
+<li><code>GET /grading-scheme</code></li>
+<li><code>GET /permissions</code></li>
+</ul>
+<h3 id="711-uploads-apiupload">7.11 Uploads (<code>/api/upload</code>)</h3>
+<ul>
+<li><code>POST /upload/photo</code></li>
+<li><code>POST /upload/template-background</code></li>
+<li><code>GET  /uploads/{filename}</code></li>
+</ul>
+<h3 id="712-social-skills-teacher-comments">7.12 Social Skills &amp; Teacher Comments</h3>
+<ul>
+<li><code>POST /social-skills</code>, <code>GET /social-skills/{student_id}</code>, <code>GET /social-skills/class/{class_id}</code></li>
+<li><code>POST /teacher-comments</code>, <code>GET /teacher-comments/{student_id}</code>, <code>GET /teacher-comments/class/{class_id}</code></li>
+</ul>
+<h3 id="713-signatures">7.13 Signatures</h3>
+<ul>
+<li><code>POST /signatures/upload</code>, <code>GET /signatures</code></li>
+</ul>
+<h3 id="714-import-export">7.14 Import / Export</h3>
+<ul>
+<li><code>POST /import/students</code>, <code>POST /import/teachers</code></li>
+<li><code>GET /export/students-template</code>, <code>GET /export/teachers-template</code></li>
+</ul>
+<h3 id="715-dashboard">7.15 Dashboard</h3>
+<ul>
+<li><code>GET /stats/dashboard</code></li>
+</ul>
+<h3 id="716-admissions-apiadmissions-admin">7.16 Admissions (<code>/api/admissions</code>) — Admin</h3>
+<ul>
+<li><code>GET /admissions/stats</code></li>
+<li><code>GET /admissions/inquiries</code></li>
+<li><code>GET /admissions/applications</code></li>
+<li><code>GET /admissions</code></li>
+<li><code>GET /admissions/{id}</code></li>
+<li><code>POST /admissions</code></li>
+<li><code>PUT /admissions/{id}</code></li>
+<li><code>DELETE /admissions/{id}</code></li>
+<li><code>POST /admissions/{id}/convert</code> — turn accepted application into a Student.</li>
+</ul>
+<h3 id="717-health-apihealth-adminteacher">7.17 Health (<code>/api/health</code>) — Admin/Teacher</h3>
+<ul>
+<li><code>GET /health/stats</code></li>
+<li><code>GET /health/{student_id}</code></li>
+<li><code>POST /health/{student_id}/vaccination</code></li>
+<li><code>POST /health/{student_id}/allergy</code></li>
+<li><code>POST /health/{student_id}/condition</code></li>
+<li><code>POST /health/{student_id}/medication</code></li>
+<li><code>POST /health/{student_id}/visit</code></li>
+<li><code>DELETE /health/{student_id}/{entry_type}/{entry_id}</code></li>
+</ul>
+<h3 id="718-discipline-apidiscipline-adminteacher">7.18 Discipline (<code>/api/discipline</code>) — Admin/Teacher</h3>
+<ul>
+<li><code>GET /discipline/stats</code></li>
+<li><code>GET /discipline</code></li>
+<li><code>GET /discipline/{id}</code></li>
+<li><code>POST /discipline</code></li>
+<li><code>PUT /discipline/{id}</code></li>
+<li><code>DELETE /discipline/{id}</code> (admin only)</li>
+</ul>
+<h3 id="719-re-enrollment-apienrollment-admin">7.19 Re-Enrollment (<code>/api/enrollment</code>) — Admin</h3>
+<ul>
+<li><code>GET /enrollment/preview?from_year=&amp;to_year=</code></li>
+<li><code>POST /enrollment/execute</code></li>
+</ul>
+<h3 id="720-audit">7.20 Audit</h3>
+<ul>
+<li><code>GET /audit-logs?entity_type=&amp;entity_id=&amp;actor_id=&amp;limit=</code></li>
+</ul>
+<h3 id="721-system">7.21 System</h3>
+<ul>
+<li><code>GET /</code> — API health banner</li>
+<li><code>GET /health</code> (root, no <code>/api</code> prefix) — for k8s liveness probe</li>
+</ul>
+<hr />
+<h2 id="8-frontend-pages-routes">8. Frontend Pages &amp; Routes</h2>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Page component</th>
+<th>Roles</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/login</code></td>
+<td><code>LoginPage</code></td>
+<td>public</td>
+</tr>
+<tr>
+<td><code>/forgot-password</code></td>
+<td><code>ForgotPasswordPage</code></td>
+<td>public</td>
+</tr>
+<tr>
+<td><code>/dashboard</code></td>
+<td><code>DashboardPage</code></td>
+<td>all authenticated</td>
+</tr>
+<tr>
+<td><code>/schools</code></td>
+<td><code>SchoolsPage</code></td>
+<td>superuser</td>
+</tr>
+<tr>
+<td><code>/students</code></td>
+<td><code>StudentProfilePage</code> (listing view)</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>/students/manage</code></td>
+<td><code>StudentsPage</code></td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>/students/:studentId</code></td>
+<td><code>StudentProfilePage</code></td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>/classes</code></td>
+<td><code>ClassesPage</code></td>
+<td>superuser/admin/teacher</td>
+</tr>
+<tr>
+<td><code>/attendance</code></td>
+<td><code>AttendancePage</code></td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>/gradebook</code></td>
+<td><code>GradebookPage</code></td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>/grades</code></td>
+<td><code>GradesPage</code></td>
+<td>superuser/admin/teacher</td>
+</tr>
+<tr>
+<td><code>/report-cards</code></td>
+<td><code>ReportsPage</code></td>
+<td>superuser/admin/teacher</td>
+</tr>
+<tr>
+<td><code>/report-manager/comments</code></td>
+<td><code>FormTeacherCommentsPage</code></td>
+<td>superuser/admin/teacher</td>
+</tr>
+<tr>
+<td><code>/report-manager/social-skills</code></td>
+<td><code>SocialSkillsManagerPage</code></td>
+<td>superuser/admin/teacher</td>
+</tr>
+<tr>
+<td><code>/report-template</code></td>
+<td><code>ReportTemplateDesigner</code> (canvas WYSIWYG)</td>
+<td>superuser/admin</td>
+</tr>
+<tr>
+<td><code>/import-export</code></td>
+<td><code>ImportExportPage</code></td>
+<td>superuser/admin</td>
+</tr>
+<tr>
+<td><code>/users</code></td>
+<td><code>UsersPage</code></td>
+<td>superuser/admin</td>
+</tr>
+<tr>
+<td><code>/staff</code>, <code>/staff/:userId</code></td>
+<td><code>StaffProfilePage</code></td>
+<td>superuser/admin</td>
+</tr>
+<tr>
+<td><code>/admissions</code></td>
+<td><code>AdmissionsPage</code></td>
+<td>superuser/admin</td>
+</tr>
+<tr>
+<td><code>/health</code></td>
+<td><code>HealthPage</code></td>
+<td>superuser/admin/teacher</td>
+</tr>
+<tr>
+<td><code>/discipline</code></td>
+<td><code>DisciplinePage</code></td>
+<td>superuser/admin/teacher</td>
+</tr>
+<tr>
+<td><code>/re-enrollment</code></td>
+<td><code>ReEnrollmentPage</code></td>
+<td>superuser/admin</td>
+</tr>
+<tr>
+<td><code>/audit-logs</code></td>
+<td><code>AuditLogPage</code></td>
+<td>superuser/admin</td>
+</tr>
+<tr>
+<td><code>/privacy</code></td>
+<td><code>PrivacyPolicyPage</code></td>
+<td>public</td>
+</tr>
+<tr>
+<td><code>/terms</code></td>
+<td><code>TermsOfUsePage</code></td>
+<td>public</td>
+</tr>
+<tr>
+<td><code>/reports</code></td>
+<td>redirect → <code>/report-cards</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Sidebar</strong> (<code>Layout.js</code>) organizes these into 7 collapsible groups: Overview, Admissions, People, Academics, Report Manager, Student Services, Administration.</p>
+<hr />
+<h2 id="9-authentication-session-management">9. Authentication &amp; Session Management</h2>
+<h3 id="91-login">9.1 Login</h3>
+<pre><code class="language-json">POST /api/auth/login
+{
+  &quot;school_code&quot;: &quot;SUNF&quot;,
+  &quot;username&quot;: &quot;admin&quot;,
+  &quot;password&quot;: &quot;…&quot;
+}
+→ 200
+{
+  &quot;access_token&quot;: &quot;eyJhbGciOi…&quot;,
+  &quot;token_type&quot;: &quot;bearer&quot;,
+  &quot;user&quot;: { &quot;id&quot;:&quot;…&quot;, &quot;role&quot;:&quot;admin&quot;, &quot;school_code&quot;:&quot;SUNF&quot;, &quot;permissions&quot;:[…] }
+}
+</code></pre>
+<ul>
+<li><code>school_code</code> is uppercased server-side.</li>
+<li>If the username isn't found in that school, the login attempts a <strong>superuser fallback</strong> — if a superuser with that username exists, the token is issued but scoped to the <em>requested</em> school (context-switching).</li>
+<li>Wrong school code returns <code>401 "Invalid school code"</code>; wrong credentials return <code>401 "Invalid credentials"</code>.</li>
+</ul>
+<h3 id="92-token">9.2 Token</h3>
+<ul>
+<li><strong>Algorithm:</strong> HS256 with <code>JWT_SECRET</code> from env (falls back to a compiled-in placeholder if missing — see §17).</li>
+<li><strong>Payload:</strong> <code>{ sub: user_id, role, school_code, exp }</code></li>
+<li><strong>TTL:</strong> 24 hours (<code>JWT_EXPIRATION_HOURS = 24</code>).</li>
+<li>Delivered via <code>Authorization: Bearer …</code> header — never as a cookie.</li>
+</ul>
+<h3 id="93-frontend-session">9.3 Frontend session</h3>
+<ul>
+<li>Stored in <code>localStorage.token</code> (see §17 for XSS implications).</li>
+<li>Global axios interceptor watches for <code>401</code> responses on non-login requests and pops the <code>SessionExpiredModal</code>, which offers a "sign in again" action that hard-logs-out and redirects.</li>
+<li><code>RouteWatcher</code> persists <code>LAST_PAGE_KEY = 'lumina_last_page'</code> so the user is returned to their previous page after a fresh login.</li>
+</ul>
+<hr />
+<h2 id="10-multi-tenancy-design">10. Multi-tenancy Design</h2>
+<ul>
+<li>Every school is keyed by <code>school_code</code> (uppercase, 3-5 letters). Examples: <code>JTECH</code>, <code>SUNF</code>, <code>RVSD</code>.</li>
+<li>Every domain document carries <code>school_code</code> and <em>every</em> query filters by it.</li>
+<li>Superuser bypass is explicit — the token carries the <em>requested</em> <code>school_code</code>, so even the superuser can only see one tenant at a time.</li>
+<li>Teacher scope is a second layer inside a tenant: <code>get_teacher_class_ids</code> restricts them to classes they own or were assigned.</li>
+<li>Startup task auto-creates <code>JTECH</code> school + superuser if absent; seed scripts (<code>/app/scripts/seed_two_schools.py</code>) add <code>SUNF</code> and <code>RVSD</code> sample tenants.</li>
+</ul>
+<hr />
+<h2 id="11-report-card-system">11. Report Card System</h2>
+<h3 id="111-default-template-design_mode-lumina_default">11.1 Default template (<code>design_mode = 'lumina_default'</code>)</h3>
+<p>Rendered by <code>LuminaDefaultReportCard.jsx</code>. Highlights:</p>
+<ul>
+<li>Legal (8.5×14) single-page layout, indigo accent (uses <code>school.primary_color</code> if present).</li>
+<li>Letter-grade colored badges — A=emerald, B=blue, C=amber, D=orange, F/E=red.</li>
+<li>Horizontal attendance tile strip.</li>
+<li>Five-dot conduct scale for Punctuality, Participation, Behaviour, Effort.</li>
+<li>Promotion pill: Promoted / On Probation / Retained (overall-score driven).</li>
+<li>Homeroom-teacher + Principal comment boxes.</li>
+<li>Stamp/seal area + parent signature line + "Generated by Lumina-SIS" footer watermark.</li>
+<li>Cannot be deleted — only duplicated or replaced (<code>is_locked_default: true</code>).</li>
+</ul>
+<h3 id="112-canvas-wysiwyg-designer-design_mode-canvas">11.2 Canvas WYSIWYG designer (<code>design_mode = 'canvas'</code>)</h3>
+<p>Route: <code>/report-template</code> (superuser/admin).</p>
+<p><strong>Element types:</strong> Text, Data Field (placeholder replaced with real student data), Image (fit-mode, opacity, rotation), Horizontal Line, Vertical Line, Rectangle, Signature slot, Grades Table, Social Skills table.</p>
+<p><strong>Editor features (see PRD):</strong>
+- Background image upload — paste any legacy report design.
+- Free positioning + drag + corner-handle resize.
+- Grid (10 px), snap-to-grid, alignment guides (5 px threshold, red).
+- Pan (Alt+drag), Zoom (Ctrl+scroll, presets 50/100/200/400%, slider 25%-400%, double-click to reset).
+- Undo (Ctrl+Z, 50 steps), Copy/Paste (Ctrl+C/V, 30 px offset).
+- Properties panel per element: Position/Size, Content, Typography (incl. line-height), Colors, Border, Padding.
+- Sparkles "Lumina default" button in the toolbar to reset back to the default layout (audit-logged).</p>
+<h3 id="113-report-generation-download">11.3 Report generation &amp; download</h3>
+<ul>
+<li><code>GET /api/report-card/{student_id}</code> returns the assembled JSON payload (student, class, gradebook, social skills, comments, attendance %, template).</li>
+<li>Client-side rendering happens in <code>ReportCardRenderer</code> (in <code>ReportsPage.js</code>), then export via <code>html2canvas → jspdf</code>.</li>
+<li>PDF file naming spec:</li>
+<li>Single: <code>[LastName]_[FirstName]_ReportCard_[Term]_[AcademicYear].pdf</code></li>
+<li>Class batch: <code>[ClassName]_[Term]_[Year].pdf</code></li>
+</ul>
+<h3 id="114-locking-sending">11.4 Locking &amp; Sending</h3>
+<ul>
+<li>Admins can <code>POST /report-cards/{student_id}/lock?term=&amp;academic_year=</code> to freeze a term.</li>
+<li><code>POST /report-cards/send</code> sends parent-facing "your child's report card is ready" notifications through Resend (never sends the raw PDF — parents are asked to log in).</li>
+</ul>
+<hr />
+<h2 id="12-grading-assessment">12. Grading &amp; Assessment</h2>
+<h3 id="121-weighted-assessment">12.1 Weighted assessment</h3>
+<p>Each subject entry captures six components with fixed weights:</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th style="text-align: right;">Weight</th>
+<th>Field name</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Homework</td>
+<td style="text-align: right;">5 %</td>
+<td><code>homework</code></td>
+</tr>
+<tr>
+<td>Group work</td>
+<td style="text-align: right;">5 %</td>
+<td><code>groupWork</code></td>
+</tr>
+<tr>
+<td>Project</td>
+<td style="text-align: right;">10 %</td>
+<td><code>project</code></td>
+</tr>
+<tr>
+<td>Quiz</td>
+<td style="text-align: right;">10 %</td>
+<td><code>quiz</code></td>
+</tr>
+<tr>
+<td>Mid-term</td>
+<td style="text-align: right;">30 %</td>
+<td><code>midTerm</code></td>
+</tr>
+<tr>
+<td>End of term</td>
+<td style="text-align: right;">40 %</td>
+<td><code>endOfTerm</code></td>
+</tr>
+</tbody>
+</table>
+<p>Weighted score = Σ(component × weight/100). Weighted score maps into the 11-band letter scale below.</p>
+<h3 id="122-grade-scale-grading_scheme">12.2 Grade scale (<code>GRADING_SCHEME</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Range</th>
+<th style="text-align: center;">Letter</th>
+<th>Domain description</th>
+<th style="text-align: right;">GPA</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>90-100</td>
+<td style="text-align: center;">A+</td>
+<td>Expert performance</td>
+<td style="text-align: right;">4.0</td>
+</tr>
+<tr>
+<td>85-89</td>
+<td style="text-align: center;">A</td>
+<td>Highly Proficient</td>
+<td style="text-align: right;">3.8</td>
+</tr>
+<tr>
+<td>80-84</td>
+<td style="text-align: center;">A-</td>
+<td>Proficient</td>
+<td style="text-align: right;">3.7</td>
+</tr>
+<tr>
+<td>75-79</td>
+<td style="text-align: center;">B</td>
+<td>Satisfactory</td>
+<td style="text-align: right;">3.5</td>
+</tr>
+<tr>
+<td>70-74</td>
+<td style="text-align: center;">B-</td>
+<td>Developing</td>
+<td style="text-align: right;">3.3</td>
+</tr>
+<tr>
+<td>65-69</td>
+<td style="text-align: center;">C</td>
+<td>Passing</td>
+<td style="text-align: right;">3.2</td>
+</tr>
+<tr>
+<td>60-64</td>
+<td style="text-align: center;">C-</td>
+<td>Passing</td>
+<td style="text-align: right;">2.8</td>
+</tr>
+<tr>
+<td>55-59</td>
+<td style="text-align: center;">D</td>
+<td>Marginal</td>
+<td style="text-align: right;">2.6</td>
+</tr>
+<tr>
+<td>50-54</td>
+<td style="text-align: center;">D-</td>
+<td>Below Average</td>
+<td style="text-align: right;">2.4</td>
+</tr>
+<tr>
+<td>40-49</td>
+<td style="text-align: center;">E</td>
+<td>Frustration</td>
+<td style="text-align: right;">1.0</td>
+</tr>
+<tr>
+<td>0-39</td>
+<td style="text-align: center;">U</td>
+<td>No participation</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="123-achievement-standards-final-exam-band">12.3 Achievement standards (final-exam band)</h3>
+<table>
+<thead>
+<tr>
+<th>Range</th>
+<th>Band</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>85-100</td>
+<td>Highly Proficient</td>
+</tr>
+<tr>
+<td>70-84</td>
+<td>Proficient</td>
+</tr>
+<tr>
+<td>50-69</td>
+<td>Developing</td>
+</tr>
+<tr>
+<td>0-49</td>
+<td>Beginning</td>
+</tr>
+</tbody>
+</table>
+<h3 id="124-core-subjects">12.4 Core subjects</h3>
+<p><code>English Language, Mathematics, Science, Social Studies</code> are marked <code>is_core=true</code>; only these count toward the class average / ranking calculations in the default report card.</p>
+<hr />
+<h2 id="13-password-reset-email">13. Password Reset &amp; Email</h2>
+<ul>
+<li><code>POST /api/auth/forgot-password</code> — always returns 200 to avoid account enumeration; the response includes a <code>delivery</code> string (<code>email</code> / <code>log</code> / <code>none</code>) that is only useful in dev.</li>
+<li>Token is a 32-char hex, TTL <strong>1 hour</strong>, stored in <code>password_resets</code> with <code>used=false</code>.</li>
+<li>If <code>RESEND_API_KEY</code> is configured and the user has an email on file, the token is sent through Resend (HTML template branded "Lumina-SIS"). Otherwise the token is logged to the backend stdout with <code>[FORGOT PASSWORD]</code> prefix.</li>
+<li><code>POST /api/auth/reset-password</code> — enforces new password ≥8 chars, marks the token <code>used=true</code>.</li>
+<li>Report-card ready email uses the same Resend integration (<code>_send_report_card_email</code>).</li>
+</ul>
+<hr />
+<h2 id="14-audit-log">14. Audit Log</h2>
+<ul>
+<li>Every privileged mutation calls <code>write_audit(actor, action, entity_type, entity_id, entity_label, details)</code> — best-effort, never crashes the caller.</li>
+<li>Actions currently logged: <code>create</code>, <code>update</code>, <code>delete</code>, <code>lock</code>, <code>unlock</code>, <code>convert</code>, <code>promote/retain/graduate/withdraw</code>, <code>reset</code> (template), <code>send</code> (report cards).</li>
+<li>Entities: <code>student</code>, <code>gradebook</code>, <code>enrollment</code>, <code>admission</code>, <code>discipline</code>, <code>health</code>, <code>user</code>, <code>school</code>, <code>report_card</code>, <code>report_template</code>.</li>
+<li>Retrieval: <code>GET /api/audit-logs</code> — filters <code>entity_type</code>, <code>entity_id</code>, <code>actor_id</code>, <code>limit≤1000</code>; sorted <code>created_at DESC</code>; <strong>school-scoped</strong>; admin/superuser only.</li>
+<li>The frontend <code>AuditLogPage</code> provides UI to filter and inspect the trail.</li>
+</ul>
+<hr />
+<h2 id="15-file-uploads-storage">15. File Uploads &amp; Storage</h2>
+<ul>
+<li>Storage root: <code>/app/backend/uploads/</code>.</li>
+<li>Upload endpoints:</li>
+<li><code>POST /api/upload/photo</code> — student/staff photo (JPEG/PNG/GIF/WEBP).</li>
+<li><code>POST /api/upload/template-background</code> — WYSIWYG designer background.</li>
+<li><code>POST /api/schools/{id}/signatures/upload</code> — principal/teacher signature PNG.</li>
+<li>Retrieval: <code>GET /api/uploads/{filename}</code> (no auth, no signing).</li>
+<li>Files are keyed by a <strong>UUID + original extension</strong>, so filename guessing is hard, but there is <strong>no auth on retrieval</strong> — see §17.</li>
+</ul>
+<hr />
+<h2 id="16-security-policies-implemented">16. Security Policies (Implemented)</h2>
+<h3 id="161-passwords">16.1 Passwords</h3>
+<ul>
+<li><strong>bcrypt</strong> with generated salt (<code>bcrypt.gensalt()</code> — default cost = 12).</li>
+<li>Minimum length <strong>8</strong> enforced only on the reset endpoint.</li>
+</ul>
+<h3 id="162-tokens">16.2 Tokens</h3>
+<ul>
+<li>JWT HS256, 24-hour TTL.</li>
+<li>Server-side revocation not implemented (no denylist); short TTL is the mitigation.</li>
+</ul>
+<h3 id="163-authorization">16.3 Authorization</h3>
+<ul>
+<li>Three-tier gate: superuser bypass, role check, permission check.</li>
+<li><strong>Tenant isolation:</strong> every query and mutation filters by <code>school_code</code>; helpers explicitly return 403 on cross-tenant attempts.</li>
+<li>Teacher scope narrows further to <code>their classes</code>.</li>
+<li>Same-user protections: cannot delete yourself, cannot delete superuser, cannot modify or demote a superuser unless you <em>are</em> a superuser.</li>
+</ul>
+<h3 id="164-account-enumeration">16.4 Account enumeration</h3>
+<ul>
+<li><code>POST /auth/forgot-password</code> returns 200 regardless of user existence.</li>
+<li>Login errors say "Invalid credentials" vs. "Invalid school code" — see §17 for the trade-off.</li>
+</ul>
+<h3 id="165-cors">16.5 CORS</h3>
+<ul>
+<li><code>CORS_ORIGINS</code> env var, defaults to <code>*</code>, split on <code>,</code>.</li>
+<li><code>allow_credentials=True</code>, <code>allow_methods=["*"]</code>, <code>allow_headers=["*"]</code>.</li>
+</ul>
+<h3 id="166-audit-trail">16.6 Audit trail</h3>
+<ul>
+<li>Immutable append-only <code>audit_logs</code>; every lock, unlock, promotion, delete, and email-send writes a row.</li>
+</ul>
+<h3 id="167-multi-tenant-safety">16.7 Multi-tenant safety</h3>
+<ul>
+<li>Startup migration flips old templates without leaking tenant data.</li>
+<li>Superuser fallback in login is explicit and audited by role field.</li>
+</ul>
+<hr />
+<h2 id="17-security-risks-known-vulnerabilities">17. Security Risks &amp; Known Vulnerabilities</h2>
+<blockquote>
+<p>The findings below are ordered by severity. Each links to the file/line where the mitigation should land.</p>
+</blockquote>
+<h3 id="171-high-default-jwt-secret-when-env-is-missing">17.1 HIGH — Default JWT secret when env is missing</h3>
+<p><code>backend/server.py:36</code> uses <code>os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')</code>. If the <code>.env</code> file (or the container secret) is missing at boot, the backend still starts with an infamous placeholder that anyone with the source code can forge tokens against.</p>
+<ul>
+<li><strong>Impact:</strong> Any attacker can mint valid tokens and impersonate any user, including superuser.</li>
+<li><strong>Fix:</strong> Fail fast at startup if <code>JWT_SECRET</code> is unset OR equals the placeholder. Rotate the current secret and invalidate all issued tokens.</li>
+</ul>
+<h3 id="172-high-jwt-stored-in-localstorage">17.2 HIGH — JWT stored in <code>localStorage</code></h3>
+<p><code>frontend/src/context/AuthContext.js:11</code> reads/writes the token to <code>localStorage</code>. Any XSS in the app (dependency compromise, unsanitized rich-text, canvas designer field, etc.) can exfiltrate the token.</p>
+<ul>
+<li><strong>Impact:</strong> Full account takeover via XSS.</li>
+<li><strong>Fix:</strong> Move JWTs to an <strong>HttpOnly, Secure, SameSite=Strict</strong> cookie. Use CSRF token for state-changing calls. If that is too invasive, at minimum add a strict Content-Security-Policy.</li>
+</ul>
+<h3 id="173-high-uploads-served-without-authentication">17.3 HIGH — Uploads served without authentication</h3>
+<p><code>GET /api/uploads/{filename}</code> is public. Student photos, signatures, and template backgrounds are all reachable by anyone who knows (or guesses) the UUID filename.</p>
+<ul>
+<li><strong>Impact:</strong> Sensitive PII (minor students' photos, principal signatures) can leak.</li>
+<li><strong>Fix:</strong> Require JWT + verify tenant on <code>/api/uploads/*</code> (either look up who owns the file, or use time-limited signed URLs). Move to S3 with signed URLs long-term.</li>
+</ul>
+<h3 id="174-high-cors-wide-open-by-default">17.4 HIGH — CORS wide-open by default</h3>
+<p><code>allow_origins=os.environ.get('CORS_ORIGINS', '*').split(',')</code> + <code>allow_credentials=True</code>. The <code>*</code> origin with credentials is normally rejected by browsers, but any misconfiguration that lists a wildcard subdomain is a risk.</p>
+<ul>
+<li><strong>Impact:</strong> Cross-site request forgery / token theft via rogue origins in cases where credentials mode is confused.</li>
+<li><strong>Fix:</strong> Pin <code>CORS_ORIGINS</code> to the exact deployment domain(s) in production and refuse to boot with <code>*</code> in prod mode.</li>
+</ul>
+<h3 id="175-high-no-rate-limiting-brute-force-protection">17.5 HIGH — No rate limiting / brute-force protection</h3>
+<p>Login and forgot-password endpoints accept unlimited requests. Combined with the deterministic error strings, an attacker can enumerate school codes and brute-force weak passwords.</p>
+<ul>
+<li><strong>Fix:</strong> Add <code>slowapi</code>/<code>limits</code> throttling (e.g. 5 attempts per IP per minute per school), plus an exponentially backed off per-account lockout on repeated failures. Log lockouts to <code>audit_logs</code>.</li>
+</ul>
+<h3 id="176-medium-distinguishable-login-errors">17.6 MEDIUM — Distinguishable login errors</h3>
+<p><code>POST /auth/login</code> returns <code>"Invalid school code"</code> vs. <code>"Invalid credentials"</code>. This lets an attacker enumerate live tenants.</p>
+<ul>
+<li><strong>Fix:</strong> Return a single generic 401 message (e.g. "Invalid school, username, or password").</li>
+</ul>
+<h3 id="177-medium-password-policy-is-weak">17.7 MEDIUM — Password policy is weak</h3>
+<ul>
+<li>No max-length, no complexity, no history — only a <code>≥8</code> characters check on reset.</li>
+<li><code>/api/users</code> creation endpoint sets the password without any strength enforcement.</li>
+<li><strong>Fix:</strong> Enforce complexity (mixed case, digit, symbol), zxcvbn score check, and rotate default seed passwords (<code>Admin@123</code>, <code>Teacher@123</code>) as soon as tenants are onboarded.</li>
+</ul>
+<h3 id="178-medium-admin123-teacher123-default-credentials">17.8 MEDIUM — <code>Admin@123</code> &amp; <code>Teacher@123</code> default credentials</h3>
+<p>Both <code>seed_two_schools.py</code> and TEST_CREDENTIALS.md ship weak default passwords. If the seed script is accidentally run in production, admins/teachers are trivial to compromise.</p>
+<ul>
+<li><strong>Fix:</strong> Gate the seed scripts behind an env flag (<code>SEED_DEMO=1</code>), force password change on first login, generate random per-user initial passwords.</li>
+</ul>
+<h3 id="179-medium-no-input-sanitization-rich-text-xss-surface">17.9 MEDIUM — No input sanitization / rich-text XSS surface</h3>
+<p>The report card canvas designer stores raw HTML in text elements, teacher comments can be arbitrary text, and both are rendered directly in the React tree via HTML strings. React escapes by default, but any <code>dangerouslySetInnerHTML</code> (used for canvas background rendering) can be abused.</p>
+<ul>
+<li><strong>Fix:</strong> Sanitize any HTML written to the DOM with <code>DOMPurify</code>. Restrict the canvas text editor to a controlled subset (no <code>&lt;script&gt;</code>, no <code>on*</code> handlers). Audit every <code>dangerouslySetInnerHTML</code> call in the frontend.</li>
+</ul>
+<h3 id="1710-medium-mongodb-has-no-indexes-defined">17.10 MEDIUM — MongoDB has no indexes defined</h3>
+<p><code>server.py</code> never calls <code>db.&lt;collection&gt;.create_index(...)</code>. Queries filter by <code>school_code</code>, <code>class_id</code>, <code>student_id</code>, <code>date</code>, and <code>academic_year</code> on collections that will grow into millions of rows.</p>
+<ul>
+<li><strong>Impact:</strong> Performance falls off a cliff at scale; a heavy report-card export can DoS the DB.</li>
+<li><strong>Fix:</strong> Add compound indexes: <code>{school_code:1, student_id:1}</code>, <code>{school_code:1, class_id:1}</code>, <code>{school_code:1, date:-1}</code>, <code>{school_code:1, term:1, academic_year:1}</code>, plus <code>{token:1, used:1}</code> on <code>password_resets</code>.</li>
+</ul>
+<h3 id="1711-medium-no-server-side-pagination-on-list-endpoints">17.11 MEDIUM — No server-side pagination on list endpoints</h3>
+<p><code>GET /students</code>, <code>/attendance</code>, <code>/gradebook</code>, <code>/discipline</code>, <code>/admissions</code>, and <code>/audit-logs</code> cap at 1000-5000 with <code>to_list(N)</code>, no <code>skip/limit</code> / cursor / <code>nextPageToken</code> in the response.</p>
+<ul>
+<li><strong>Fix:</strong> Add <code>page</code>, <code>page_size</code> (or cursor) parameters and return <code>{items, total, next}</code>. Update the frontend to consume it.</li>
+</ul>
+<h3 id="1712-medium-file-upload-validation-is-minimal">17.12 MEDIUM — File-upload validation is minimal</h3>
+<p>Uploads accept any content, only trusting the extension. There is no magic-byte check, no size cap, no virus scan.</p>
+<ul>
+<li><strong>Fix:</strong> Validate the actual MIME (<code>python-magic</code>), cap size at ~5 MB, reject SVG (XSS vector), strip EXIF, virus-scan via ClamAV if hosted.</li>
+</ul>
+<h3 id="1713-low-long-lived-jwts-24-h">17.13 LOW — Long-lived JWTs (24 h)</h3>
+<p>Once issued, a token is valid for 24 hours regardless of password change or account deletion.</p>
+<ul>
+<li><strong>Fix:</strong> Short-lived access tokens (15 min) + refresh tokens (rotating, revocable via DB), or a <code>token_version</code> field on users incremented on password change.</li>
+</ul>
+<h3 id="1714-low-no-https-enforcement-in-the-app">17.14 LOW — No HTTPS enforcement in the app</h3>
+<p>The backend does not set <code>Strict-Transport-Security</code>, <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>, or CSP headers. It relies entirely on the ingress.</p>
+<ul>
+<li><strong>Fix:</strong> Add a small <code>SecurityHeadersMiddleware</code> and set the standard hardening headers.</li>
+</ul>
+<h3 id="1715-low-no-account-lockout-after-n-failed-logins">17.15 LOW — No account-lockout after N failed logins</h3>
+<p>There is no counter on failed logins, so weak passwords stay vulnerable even with rate limiting.</p>
+<ul>
+<li><strong>Fix:</strong> Track <code>failed_attempts</code> on the user document; lock for 15 min after 10 failed attempts; audit-log the lockout.</li>
+</ul>
+<h3 id="1716-low-env-files-not-tracked">17.16 LOW — <code>.env</code> files not tracked</h3>
+<p>Backend refuses to boot without <code>MONGO_URL</code> (correct), but <code>.env</code> was missing after the GitHub rebuild — recreated during this documentation task. Anyone re-cloning the repo will have the same downtime.</p>
+<ul>
+<li><strong>Fix:</strong> Ship a <code>.env.example</code> in the repo and add a <code>deploy.sh</code> that creates a valid <code>.env</code> from environment secrets.</li>
+</ul>
+<h3 id="1717-low-no-csrf-protection-for-cookie-flows">17.17 LOW — No CSRF protection for cookie flows</h3>
+<p>Not currently exploitable (JWT is in <code>localStorage</code>, not a cookie), but if #17.2 is fixed by moving to cookies, CSRF becomes required.</p>
+<ul>
+<li><strong>Fix:</strong> Include <code>SameSite=Strict</code> and per-request CSRF tokens when moving to cookies.</li>
+</ul>
+<h3 id="1718-low-no-pii-redaction-gdpr-style-controls">17.18 LOW — No PII redaction / GDPR-style controls</h3>
+<p>Health records, discipline incidents, and family-member emails/phones are stored indefinitely in plain text.</p>
+<ul>
+<li><strong>Fix:</strong> Add a per-tenant retention policy; support "right to erasure" endpoints; document PII fields; encrypt sensitive fields at rest with a KMS key.</li>
+</ul>
+<h3 id="1719-low-password-reset-token-has-no-per-user-limit">17.19 LOW — Password reset token has no per-user limit</h3>
+<p>A user can request unlimited reset tokens, each creating a new row.</p>
+<ul>
+<li><strong>Fix:</strong> Rate-limit <code>POST /auth/forgot-password</code> to 3 per hour per (school_code, username) and expire prior tokens on new issuance.</li>
+</ul>
+<hr />
+<h2 id="18-recommendations-for-improvements">18. Recommendations for Improvements</h2>
+<h3 id="181-security-highest-priority">18.1 Security (highest priority)</h3>
+<ol>
+<li>Fail-fast on missing/placeholder <code>JWT_SECRET</code> (§17.1).</li>
+<li>Move JWT to HttpOnly cookies + CSRF (§17.2, §17.17).</li>
+<li>Gate <code>GET /api/uploads/*</code> behind auth + tenancy (§17.3).</li>
+<li>Pin CORS origins per environment (§17.4).</li>
+<li>Add <code>slowapi</code> rate limiting + per-account lockout (§17.5, §17.15).</li>
+<li>Homogenize login errors (§17.6).</li>
+<li>Enforce password complexity + rotate demo seeds (§17.7, §17.8).</li>
+<li>Sanitize any user-controlled HTML (<code>DOMPurify</code>) (§17.9).</li>
+<li>Add security headers middleware and CSP (§17.14).</li>
+<li>Add magic-byte validation and size caps on uploads (§17.12).</li>
+</ol>
+<h3 id="182-performance-scale">18.2 Performance &amp; Scale</h3>
+<ol>
+<li><strong>Create MongoDB indexes</strong> (§17.10). Immediate 10–100× read speed-up on multi-tenant queries.</li>
+<li><strong>Server-side pagination</strong> for <code>/students</code>, <code>/attendance</code>, <code>/audit-logs</code>, <code>/gradebook</code> (§17.11).</li>
+<li>Split <code>server.py</code> (4 015 LoC) into module routers — see PRD tech-debt item.</li>
+<li>Cache <code>/subjects</code>, <code>/houses</code>, <code>/grading-scheme</code>, <code>/permissions</code> with <code>Cache-Control: max-age=3600, immutable</code>.</li>
+<li>Batch load report-card data in <code>GET /report-cards/class/{class_id}</code> with <code>$lookup</code> aggregation to avoid N+1.</li>
+<li>Streaming CSV export instead of buffering.</li>
+</ol>
+<h3 id="183-ux-product">18.3 UX / Product</h3>
+<ol>
+<li>Dark mode (PRD backlog).</li>
+<li>Parent portal with per-student PDF download inline.</li>
+<li>Class timetable / academic calendar module.</li>
+<li>Communication module (announcements, homework, messaging).</li>
+<li>Report-card locking UI badges in <code>ReportsPage</code>.</li>
+<li>Reveal <code>delivery=log</code> in the forgot-password toast only for dev builds.</li>
+<li>Wire the <code>SessionExpiredModal</code> to also cover 403 → forbidden route redirect.</li>
+<li>Add "impersonate school" chip in the header for superusers (currently they must log out and back in).</li>
+</ol>
+<h3 id="184-data">18.4 Data</h3>
+<ol>
+<li>Add validation on <code>date_of_birth</code> (<code>YYYY-MM-DD</code>, not in the future) at the model level.</li>
+<li>Enforce <code>school_code</code> regex at model level (<code>^[A-Z]{3,5}$</code>).</li>
+<li>Standardize on ISO-8601 UTC everywhere (<code>datetime.now(timezone.utc).isoformat()</code>) — already done in most places, sweep the rest.</li>
+<li>Add optimistic-concurrency (<code>updated_at</code> compare-and-swap) on gradebook and report-card locks.</li>
+</ol>
+<h3 id="185-devops-reliability">18.5 DevOps / Reliability</h3>
+<ol>
+<li>Ship <code>.env.example</code> (§17.16).</li>
+<li>Add unit tests to CI — the repo already has 9 test files in <code>backend/tests/</code> but no CI runner.</li>
+<li>Structured logging (JSON) with correlation IDs — swap the current basicConfig for <code>structlog</code>.</li>
+<li>Health probes: extend <code>GET /health</code> to also ping Mongo and Resend.</li>
+<li>Move <code>/backend/uploads/</code> to S3 or a persistent volume with pre-signed URLs.</li>
+<li>Backups: nightly <code>mongodump</code> per tenant into an encrypted bucket.</li>
+</ol>
+<h3 id="186-testing-quality">18.6 Testing / Quality</h3>
+<ol>
+<li>Add pytest fixtures for JWT + tenant scoping so RBAC regressions are caught.</li>
+<li>Add Playwright end-to-end for at least the login-take-attendance-generate-report happy path.</li>
+<li>Add explicit RBAC test that a teacher <strong>cannot</strong> view another teacher's gradebook.</li>
+</ol>
+<hr />
+<h2 id="19-deployment-operations">19. Deployment &amp; Operations</h2>
+<h3 id="191-local-container">19.1 Local / Container</h3>
+<ul>
+<li>All services live under <code>supervisord</code>:</li>
+<li><code>backend</code> (uvicorn on <code>0.0.0.0:8001</code>).</li>
+<li><code>frontend</code> (<code>craco start</code>, port 3000).</li>
+<li><code>mongodb</code> (local, port 27017).</li>
+<li><code>nginx-code-proxy</code> + <code>code-server</code> (dev IDE, unrelated to product).</li>
+<li>Standard commands:
+  <code>bash
+  sudo supervisorctl restart backend
+  sudo supervisorctl restart frontend
+  sudo supervisorctl status</code></li>
+</ul>
+<h3 id="192-environment-variables">19.2 Environment variables</h3>
+<p><strong>backend/.env</strong></p>
+<pre><code>MONGO_URL=mongodb://localhost:27017
+DB_NAME=lumina_sis
+JWT_SECRET=…rotate-me…
+CORS_ORIGINS=https://your-domain.example
+RESEND_API_KEY=re_xxx_optional
+SENDER_EMAIL=onboarding@resend.dev
+</code></pre>
+<p><strong>frontend/.env</strong></p>
+<pre><code>REACT_APP_BACKEND_URL=https://your-preview-or-prod-hostname
+WDS_SOCKET_PORT=443
+</code></pre>
+<h3 id="193-kubernetes-ingress-rules">19.3 Kubernetes ingress rules</h3>
+<ul>
+<li><code>/api/*</code> → backend (port 8001).</li>
+<li>Everything else → frontend (port 3000).</li>
+<li>Never modify these in code; use the ingress config.</li>
+</ul>
+<h3 id="194-seed-scripts">19.4 Seed scripts</h3>
+<ul>
+<li><code>scripts/seed_two_schools.py</code> — creates <code>SUNF</code> and <code>RVSD</code> sample tenants with admins, teachers, students, and classes.</li>
+<li><code>scripts/migrate_schools.py</code>, <code>migrate_school_subjects.py</code>, <code>update_academic_year.py</code> — one-off data migrations.</li>
+</ul>
+<h3 id="195-migrations">19.5 Migrations</h3>
+<ul>
+<li><code>@app.on_event("startup")</code> in <code>server.py</code>:</li>
+<li><code>create_superuser</code> — idempotently creates <code>JTECH</code> school + superuser account.</li>
+<li><code>startup_migrations</code> — flips legacy or empty templates to <code>design_mode='lumina_default'</code>, sets <code>is_locked_default=True</code>.</li>
+</ul>
+<hr />
+<h2 id="20-test-credentials">20. Test Credentials</h2>
+<table>
+<thead>
+<tr>
+<th>Tenant</th>
+<th>School code</th>
+<th>Username</th>
+<th>Password</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JTECH Innovations</td>
+<td><code>JTECH</code></td>
+<td><code>jtech.innovations@outlook.com</code></td>
+<td><code>Xekleidoma@1</code></td>
+<td>superuser (system)</td>
+</tr>
+<tr>
+<td>Sunflower Academy</td>
+<td><code>SUNF</code></td>
+<td><code>admin</code></td>
+<td><code>Admin@123</code></td>
+<td>admin</td>
+</tr>
+<tr>
+<td>Sunflower Academy</td>
+<td><code>SUNF</code></td>
+<td><code>sarah.thompson.sunf</code></td>
+<td><code>Teacher@123</code></td>
+<td>teacher</td>
+</tr>
+<tr>
+<td>Riverside International</td>
+<td><code>RVSD</code></td>
+<td><code>admin</code></td>
+<td><code>Admin@123</code></td>
+<td>admin</td>
+</tr>
+<tr>
+<td>Riverside International</td>
+<td><code>RVSD</code></td>
+<td><code>elizabeth.anderson.rvsd</code></td>
+<td><code>Teacher@123</code></td>
+<td>teacher</td>
+</tr>
+</tbody>
+</table>
+<p><code>SUNF</code> and <code>RVSD</code> need to be seeded (<code>python /app/scripts/seed_two_schools.py</code>). The <code>JTECH</code> superuser is auto-created at every startup.</p>
+<p><strong>Rotate all default passwords in production.</strong> See §17.8.</p>
+<hr />
+<h2 id="21-appendix-environment-variables">21. Appendix: Environment Variables</h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Location</th>
+<th>Default</th>
+<th style="text-align: center;">Required</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MONGO_URL</code></td>
+<td>backend/.env</td>
+<td>—</td>
+<td style="text-align: center;">✅</td>
+<td>Server refuses to boot without this.</td>
+</tr>
+<tr>
+<td><code>DB_NAME</code></td>
+<td>backend/.env</td>
+<td>—</td>
+<td style="text-align: center;">✅</td>
+<td>e.g. <code>lumina_sis</code>.</td>
+</tr>
+<tr>
+<td><code>JWT_SECRET</code></td>
+<td>backend/.env</td>
+<td>placeholder</td>
+<td style="text-align: center;">⚠️ should be</td>
+<td>See §17.1.</td>
+</tr>
+<tr>
+<td><code>CORS_ORIGINS</code></td>
+<td>backend/.env</td>
+<td><code>*</code></td>
+<td style="text-align: center;">recommended</td>
+<td>Comma-separated exact origins in prod.</td>
+</tr>
+<tr>
+<td><code>RESEND_API_KEY</code></td>
+<td>backend/.env</td>
+<td>empty</td>
+<td style="text-align: center;">optional</td>
+<td>Enables password-reset + report-card emails.</td>
+</tr>
+<tr>
+<td><code>SENDER_EMAIL</code></td>
+<td>backend/.env</td>
+<td><code>onboarding@resend.dev</code></td>
+<td style="text-align: center;">optional</td>
+<td>Verified sender in Resend.</td>
+</tr>
+<tr>
+<td><code>REACT_APP_BACKEND_URL</code></td>
+<td>frontend/.env</td>
+<td>—</td>
+<td style="text-align: center;">✅</td>
+<td>Public backend URL (<code>https://…</code>).</td>
+</tr>
+<tr>
+<td><code>WDS_SOCKET_PORT</code></td>
+<td>frontend/.env</td>
+<td>443</td>
+<td style="text-align: center;">dev only</td>
+<td>CRA websocket port.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="22-appendix-ground-truth-metrics">22. Appendix: Ground-truth Metrics</h2>
+<p>Auto-collected from the current source tree:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th style="text-align: right;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backend <code>/api/*</code> endpoints</td>
+<td style="text-align: right;">104</td>
+</tr>
+<tr>
+<td>Backend Python functions</td>
+<td style="text-align: right;">139</td>
+</tr>
+<tr>
+<td>Backend LoC (<code>server.py</code>)</td>
+<td style="text-align: right;">4 015</td>
+</tr>
+<tr>
+<td>Frontend LoC (pages + components)</td>
+<td style="text-align: right;">13 672</td>
+</tr>
+<tr>
+<td>Frontend pages</td>
+<td style="text-align: right;">25</td>
+</tr>
+<tr>
+<td>React Router routes</td>
+<td style="text-align: right;">27 (24 protected + 3 public/redirects)</td>
+</tr>
+<tr>
+<td>MongoDB collections referenced</td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr>
+<td>Auth roles</td>
+<td style="text-align: right;">4 (superuser, admin, teacher, parent)</td>
+</tr>
+<tr>
+<td>Named permissions</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr>
+<td>Default subjects</td>
+<td style="text-align: right;">10 (4 core)</td>
+</tr>
+<tr>
+<td>Grade bands</td>
+<td style="text-align: right;">11</td>
+</tr>
+<tr>
+<td>Achievement bands</td>
+<td style="text-align: right;">4</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="document-info">Document Info</h3>
+<ul>
+<li><strong>Generated:</strong> July 2025</li>
+<li><strong>Source:</strong> live scan of <code>/app</code> after GitHub rebuild.</li>
+<li><strong>Owner:</strong> Lumina-SIS project maintainers.</li>
+<li><strong>License:</strong> internal — refer to repo <code>LICENSE</code> if/when added.</li>
+</ul>
+<hr />
+<p><em>End of documentation.</em></p>
+</body>
+</html>
