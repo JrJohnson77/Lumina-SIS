@@ -8,12 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Sparkles, Loader2, Save, Settings as SettingsIcon } from 'lucide-react';
+import { useDefaultAcademicYear } from '../hooks/useDefaultAcademicYear';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const TERMS = ['Term 1', 'Term 2', 'Term 3'];
 const CURRENT_YEAR = new Date().getFullYear();
-const ACADEMIC_YEARS = [
+const FALLBACK_YEARS = [
     `${CURRENT_YEAR-1}-${CURRENT_YEAR}`,
     `${CURRENT_YEAR}-${CURRENT_YEAR+1}`,
     `${CURRENT_YEAR+1}-${CURRENT_YEAR+2}`
@@ -49,7 +50,9 @@ export default function SocialSkillsManagerPage() {
     const [classes, setClasses] = useState([]);
     const [selectedClass, setSelectedClass] = useState('');
     const [selectedTerm, setSelectedTerm] = useState('Term 1');
-    const [selectedYear, setSelectedYear] = useState(`${CURRENT_YEAR}-${CURRENT_YEAR+1}`);
+    const [selectedYear, setSelectedYear] = useState('');
+    const { academicYears: contextYears } = useDefaultAcademicYear(selectedYear, setSelectedYear);
+    const ACADEMIC_YEARS = contextYears?.length ? contextYears : FALLBACK_YEARS;
 
     const [template, setTemplate] = useState(null);
     const [students, setStudents] = useState([]);

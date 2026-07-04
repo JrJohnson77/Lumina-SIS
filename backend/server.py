@@ -790,6 +790,41 @@ async def login(credentials: UserLogin):
 async def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(**{k: v for k, v in current_user.items() if k != "password_hash"})
 
+
+@api_router.get("/system/context")
+async def get_system_context(current_user: dict = Depends(get_current_user)):
+    """Lightweight bootstrap payload: returns the user's school code, its current
+    academic year (set by superuser via /schools/{id}/academic-years/{year}/set-current),
+    and the enabled academic years list. Consumed by the frontend to pre-select
+    the correct academic year across every page for every user."""
+    sc = current_user["school_code"]
+    school = await db.schools.find_one({"school_code": sc}, {"_id": 0}) or {}
+    academic_years = school.get("academic_years") or []
+    current_year = school.get("current_academic_year") or ""
+    if not current_year:
+        # Fall back to any is_current or the first enabled one
+        for ay in academic_years:
+            if ay.get("is_current"):
+                current_year = ay["year"]
+                break
+        if not current_year and academic_years:
+            for ay in academic_years:
+                if ay.get("is_enabled", True):
+                    current_year = ay["year"]
+                    break
+    # Enabled years for the dropdown
+    enabled = [ay["year"] for ay in academic_years if ay.get("is_enabled", True)]
+    if not enabled and current_year:
+        enabled = [current_year]
+    return {
+        "school_code": sc,
+        "school_id": school.get("id"),
+        "school_name": school.get("name"),
+        "current_academic_year": current_year,
+        "academic_years": enabled,
+        "all_academic_years": academic_years,  # includes disabled ones for admins
+    }
+
 # ==================== SCHOOL MANAGEMENT (Superuser Only) ====================
 
 @api_router.post("/schools", response_model=SchoolResponse)
@@ -974,8 +1009,121 @@ async def set_current_academic_year(
             "current_academic_year": year
         }}
     )
-    
+    await write_audit(
+        current_user, "update", "school", school_id,
+        f"{school.get('school_code','')} · default AY -> {year}",
+    )
     return {"message": f"Current academic year set to {year}"}
+
+@api_router.put("/schools/{school_id}/academic-years/{year}")
+async def rename_academic_year(
+    school_id: str,
+    year: str,
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_superuser()),
+):
+    """Rename an academic year AND cascade-update every document that
+    references it (gradebook, social_skills, teacher_comments, classes).
+    Superuser only.
+
+    Body: {"new_year": "2026-2027"}"""
+    school = await db.schools.find_one({"id": school_id}, {"_id": 0})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    new_year = (payload or {}).get("new_year", "").strip()
+    if not new_year:
+        raise HTTPException(status_code=400, detail="new_year is required")
+    if new_year == year:
+        return {"message": "No change"}
+    academic_years = school.get("academic_years", [])
+    if any(ay.get("year") == new_year for ay in academic_years):
+        raise HTTPException(status_code=400, detail=f"Academic year '{new_year}' already exists")
+    found = False
+    for ay in academic_years:
+        if ay.get("year") == year:
+            ay["year"] = new_year
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Academic year not found")
+
+    was_current = (school.get("current_academic_year") == year)
+    updates = {"academic_years": academic_years}
+    if was_current:
+        updates["current_academic_year"] = new_year
+    await db.schools.update_one({"id": school_id}, {"$set": updates})
+
+    # Cascade within tenant
+    sc = school["school_code"]
+    scoped = {"school_code": sc, "academic_year": year}
+    upd = {"$set": {"academic_year": new_year}}
+    n_gradebook = (await db.gradebook.update_many(scoped, upd)).modified_count
+    n_social = (await db.social_skills.update_many(scoped, upd)).modified_count
+    n_comments = (await db.teacher_comments.update_many(scoped, upd)).modified_count
+    n_classes = (await db.classes.update_many(scoped, upd)).modified_count
+    await write_audit(
+        current_user, "update", "school", school_id,
+        f"{sc} · AY '{year}' -> '{new_year}' (cascaded {n_gradebook}+{n_social}+{n_comments}+{n_classes})",
+    )
+    return {
+        "message": f"Academic year renamed '{year}' -> '{new_year}'",
+        "cascaded": {
+            "gradebook": n_gradebook, "social_skills": n_social,
+            "teacher_comments": n_comments, "classes": n_classes,
+        },
+    }
+
+
+@api_router.delete("/schools/{school_id}/academic-years/{year}")
+async def delete_academic_year(
+    school_id: str,
+    year: str,
+    force: bool = False,
+    current_user: dict = Depends(require_superuser()),
+):
+    """Delete an academic year from a school. Superuser only.
+
+    - Refuses if dependent records exist unless `?force=true`.
+    - Refuses to delete the CURRENT academic year — set a different one as
+      current first."""
+    school = await db.schools.find_one({"id": school_id}, {"_id": 0})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    if school.get("current_academic_year") == year:
+        raise HTTPException(status_code=400, detail="Cannot delete the current academic year. Set a different one as current first.")
+    academic_years = school.get("academic_years", [])
+    if not any(ay.get("year") == year for ay in academic_years):
+        raise HTTPException(status_code=404, detail="Academic year not found")
+
+    sc = school["school_code"]
+    scoped = {"school_code": sc, "academic_year": year}
+    counts = {
+        "gradebook": await db.gradebook.count_documents(scoped),
+        "social_skills": await db.social_skills.count_documents(scoped),
+        "teacher_comments": await db.teacher_comments.count_documents(scoped),
+        "classes": await db.classes.count_documents(scoped),
+    }
+    total = sum(counts.values())
+    if total and not force:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Academic year has {total} dependent records ({counts}). Pass ?force=true to delete them.",
+        )
+    if force:
+        await db.gradebook.delete_many(scoped)
+        await db.social_skills.delete_many(scoped)
+        await db.teacher_comments.delete_many(scoped)
+        await db.classes.delete_many(scoped)
+
+    new_ay = [ay for ay in academic_years if ay.get("year") != year]
+    await db.schools.update_one({"id": school_id}, {"$set": {"academic_years": new_ay}})
+    await write_audit(
+        current_user, "delete", "school", school_id,
+        f"{sc} · deleted AY '{year}' (force={force}, cascaded={total if force else 0})",
+    )
+    return {"message": f"Academic year '{year}' deleted", "cascaded_deleted": total if force else 0}
+
+
 
 # ==================== SCHOOL SIGNATURE MANAGEMENT ====================
 

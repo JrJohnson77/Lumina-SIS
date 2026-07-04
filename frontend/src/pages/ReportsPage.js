@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useDefaultAcademicYear } from '../hooks/useDefaultAcademicYear';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Card, CardContent } from '../components/ui/card';
@@ -27,7 +28,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const TERMS = ['Term 1', 'Term 2', 'Term 3'];
 const CURRENT_YEAR = new Date().getFullYear();
-const ACADEMIC_YEARS = [
+const FALLBACK_YEARS = [
     `${CURRENT_YEAR-1}-${CURRENT_YEAR}`, 
     `${CURRENT_YEAR}-${CURRENT_YEAR+1}`,
     `${CURRENT_YEAR+1}-${CURRENT_YEAR+2}`
@@ -805,7 +806,9 @@ export default function ReportsPage() {
     const [gradingScheme, setGradingScheme] = useState([]);
     const [selectedClass, setSelectedClass] = useState('');
     const [selectedTerm, setSelectedTerm] = useState(TERMS[0]);
-    const [selectedYear, setSelectedYear] = useState(ACADEMIC_YEARS[0]);
+    const [selectedYear, setSelectedYear] = useState('');
+    const { academicYears: contextYears } = useDefaultAcademicYear(selectedYear, setSelectedYear);
+    const ACADEMIC_YEARS = contextYears?.length ? contextYears : FALLBACK_YEARS;
     const [reportCards, setReportCards] = useState([]);
     const [totalStudentsInClass, setTotalStudentsInClass] = useState(0);
     const [reportSignatures, setReportSignatures] = useState({});

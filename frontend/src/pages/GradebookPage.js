@@ -26,11 +26,13 @@ import {
     Unlock
 } from 'lucide-react';
 
+import { useDefaultAcademicYear } from '../hooks/useDefaultAcademicYear';
+
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const TERMS = ['Term 1', 'Term 2', 'Term 3'];
 const CURRENT_YEAR = new Date().getFullYear();
-const ACADEMIC_YEARS = [
+const FALLBACK_YEARS = [
     `${CURRENT_YEAR-1}-${CURRENT_YEAR}`, 
     `${CURRENT_YEAR}-${CURRENT_YEAR+1}`,
     `${CURRENT_YEAR+1}-${CURRENT_YEAR+2}`
@@ -76,7 +78,9 @@ export default function GradebookPage() {
     const [selectedClass, setSelectedClass] = useState('');
     const [selectedStudent, setSelectedStudent] = useState('');
     const [selectedTerm, setSelectedTerm] = useState(TERMS[0]);
-    const [selectedYear, setSelectedYear] = useState(ACADEMIC_YEARS[0]);
+    const [selectedYear, setSelectedYear] = useState('');
+    const { academicYears: contextYears } = useDefaultAcademicYear(selectedYear, setSelectedYear);
+    const ACADEMIC_YEARS = contextYears?.length ? contextYears : FALLBACK_YEARS;
     const [activeTab, setActiveTab] = useState('grades');
     
     const [grades, setGrades] = useState({});

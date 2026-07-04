@@ -21,6 +21,7 @@ import BehaviorTab from '../components/student-profile/BehaviorTab';
 import ContactTab from '../components/student-profile/ContactTab';
 import ProfileTab from '../components/student-profile/ProfileTab';
 import SchoolTab from '../components/student-profile/SchoolTab';
+import ReportFieldsTab from '../components/student-profile/ReportFieldsTab';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -74,6 +75,7 @@ const TABS = [
     { key: 'behavior',   label: 'Behavior' },
     { key: 'family',     label: 'Family' },
     { key: 'medical',    label: 'Medical' },
+    { key: 'report',     label: 'Report Fields' },
     { key: 'school',     label: 'School' },
 ];
 
@@ -264,6 +266,7 @@ export default function StudentProfilePage() {
             case 'family':     return <FamilyTab {...props} />;
             case 'behavior':   return <BehaviorTab {...props} />;
             case 'medical':    return <MedicalTab {...props} />;
+            case 'report':     return <ReportFieldsTab {...props} />;
             default:           return <DashboardTab {...props} onCardClick={onTabChange} />;
         }
     };

@@ -11,6 +11,7 @@ export const AuthProvider = ({ children }) => {
     const [token, setToken] = useState(localStorage.getItem('token'));
     const [loading, setLoading] = useState(true);
     const [sessionExpired, setSessionExpired] = useState(false);
+    const [systemContext, setSystemContext] = useState(null); // {school_code, current_academic_year, academic_years[], all_academic_years[]}
     const interceptorId = useRef(null);
 
     // Global axios 401 interceptor — set up once
@@ -43,6 +44,15 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await axios.get(`${API}/auth/me`);
             setUser(response.data);
+            // Also fetch the school's academic-year context so pages can
+            // default to the currently-active AY.
+            try {
+                const ctxResp = await axios.get(`${API}/system/context`);
+                setSystemContext(ctxResp.data);
+            } catch (_e) {
+                // Non-fatal — fall back to hardcoded per-page defaults
+                setSystemContext(null);
+            }
         } catch (error) {
             console.error('Failed to fetch user:', error);
             // Don't call logout() here — let the session-expired modal handle it
@@ -51,6 +61,16 @@ export const AuthProvider = ({ children }) => {
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const refreshSystemContext = async () => {
+        try {
+            const ctxResp = await axios.get(`${API}/system/context`);
+            setSystemContext(ctxResp.data);
+            return ctxResp.data;
+        } catch (_e) {
+            return null;
         }
     };
 
@@ -67,6 +87,14 @@ export const AuthProvider = ({ children }) => {
         setToken(access_token);
         setUser(userData);
         setSessionExpired(false);
+
+        // Fetch system context immediately after login (best-effort)
+        try {
+            const ctxResp = await axios.get(`${API}/system/context`);
+            setSystemContext(ctxResp.data);
+        } catch (_e) {
+            setSystemContext(null);
+        }
 
         return userData;
     };
@@ -130,6 +158,14 @@ export const AuthProvider = ({ children }) => {
             return user?.permissions?.includes(permission) || false;
         },
         schoolCode: user?.school_code,
+        // System-wide academic year context (set by superuser via
+        // /schools/{id}/academic-years/{year}/set-current). Every page that
+        // shows an AY dropdown should default to `currentAcademicYear`.
+        systemContext,
+        refreshSystemContext,
+        currentAcademicYear: systemContext?.current_academic_year || '',
+        academicYears: systemContext?.academic_years || [],
+        allAcademicYears: systemContext?.all_academic_years || [],
     };
 
     return (

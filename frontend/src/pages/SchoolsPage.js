@@ -64,7 +64,7 @@ export default function SchoolsPage() {
     const [formData, setFormData] = useState(initialSchoolForm);
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState('basic');
-    const { isSuperuser } = useAuth();
+    const { isSuperuser, refreshSystemContext } = useAuth();
 
     // Gradebook settings state
     const [template, setTemplate] = useState(null);
@@ -346,8 +346,57 @@ export default function SchoolsPage() {
             toast.success(`Current academic year set to ${year}`);
             setCurrentAcademicYear(year);
             fetchSchoolDetails(editingSchool.id);
+            // Propagate to the whole app: AuthContext re-fetches /system/context
+            // so every page's AY selector picks up the new default.
+            refreshSystemContext?.();
         } catch (error) {
             toast.error('Failed to set current year');
+        }
+    };
+
+    const handleRenameYear = async (oldYear) => {
+        if (!editingSchool) return;
+        const newYear = window.prompt(`Rename academic year "${oldYear}" to:`, oldYear);
+        if (!newYear || newYear.trim() === '' || newYear === oldYear) return;
+        try {
+            const res = await axios.put(
+                `${API}/schools/${editingSchool.id}/academic-years/${oldYear}`,
+                { new_year: newYear.trim() },
+            );
+            const c = res.data?.cascaded;
+            const parts = c ? ` — cascaded ${c.gradebook}+${c.social_skills}+${c.teacher_comments}+${c.classes} records.` : '';
+            toast.success(`Renamed "${oldYear}" -> "${newYear.trim()}"${parts}`);
+            fetchSchoolDetails(editingSchool.id);
+            refreshSystemContext?.();
+        } catch (error) {
+            toast.error(error?.response?.data?.detail || 'Failed to rename year');
+        }
+    };
+
+    const handleDeleteYear = async (year) => {
+        if (!editingSchool) return;
+        if (!window.confirm(`Delete academic year "${year}"?\n\nAny dependent records will block the delete unless you also choose to cascade.`)) return;
+        try {
+            await axios.delete(`${API}/schools/${editingSchool.id}/academic-years/${year}`);
+            toast.success(`Deleted "${year}"`);
+            fetchSchoolDetails(editingSchool.id);
+            refreshSystemContext?.();
+        } catch (error) {
+            const detail = error?.response?.data?.detail || '';
+            if (detail && detail.includes('dependent records')) {
+                if (window.confirm(`${detail}\n\nAlso delete every gradebook/attendance/comment/class row for "${year}"? THIS CANNOT BE UNDONE.`)) {
+                    try {
+                        await axios.delete(`${API}/schools/${editingSchool.id}/academic-years/${year}?force=true`);
+                        toast.success(`Deleted "${year}" and its dependent records`);
+                        fetchSchoolDetails(editingSchool.id);
+                        refreshSystemContext?.();
+                    } catch (e2) {
+                        toast.error(e2?.response?.data?.detail || 'Failed to cascade-delete year');
+                    }
+                }
+            } else {
+                toast.error(detail || 'Failed to delete year');
+            }
         }
     };
 
@@ -600,6 +649,29 @@ export default function SchoolsPage() {
                                                                 >
                                                                     Set as Current
                                                                 </Button>
+                                                            )}
+                                                            {isSuperuser && (
+                                                                <>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        onClick={() => handleRenameYear(year.year)}
+                                                                        className="rounded-lg text-xs"
+                                                                        title="Rename this academic year (cascades to all records)"
+                                                                    >
+                                                                        Rename
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        onClick={() => handleDeleteYear(year.year)}
+                                                                        disabled={year.is_current}
+                                                                        className="rounded-lg text-xs text-red-600 hover:text-red-700"
+                                                                        title={year.is_current ? 'Set a different year as current first' : 'Delete this academic year'}
+                                                                    >
+                                                                        Delete
+                                                                    </Button>
+                                                                </>
                                                             )}
                                                         </div>
                                                     </div>

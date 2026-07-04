@@ -399,12 +399,73 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Ashcombe report template — SYSTEM default + 3-region endpoints"
-    - "Ashcombe report card renders with real data at GET /api/report-card/{id}"
-    - "RBAC: Superuser-only for header/body/footer; Admin-only for theme"
+    - "GET /api/system/context — current AY + enabled list"
+    - "PUT /api/schools/{id}/academic-years/{year} — rename with cascade"
+    - "DELETE /api/schools/{id}/academic-years/{year} — with dependent-record guard + force"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "NEW FEATURE (academic year management + system context). Backend additions to test: (1) GET /api/system/context — any auth user, returns {school_code, school_id, school_name, current_academic_year, academic_years[enabled only], all_academic_years[]}. current_academic_year MUST reflect the school's `current_academic_year` field. (2) PUT /api/schools/{school_id}/academic-years/{year} — SUPERUSER ONLY. Body: {new_year:'2026-2027'}. Renames year AND cascades update to gradebook, social_skills, teacher_comments, classes documents in the same tenant. Returns {message, cascaded:{gradebook,social_skills,teacher_comments,classes}}. Rejects if new_year already exists. Updates school.current_academic_year if the renamed one was current. Admin should get 403. (3) DELETE /api/schools/{school_id}/academic-years/{year}?force=false — SUPERUSER ONLY. Refuses if the year is the CURRENT one (must set a different one as current first). Refuses if any dependent records exist unless ?force=true. With force=true, deletes gradebook/social_skills/teacher_comments/classes for that year. Admin should get 403. Test credentials: SUNF admin (admin/Admin@123), JTECH superuser (jtech.innovations@outlook.com/Xekleidoma@1). Sequence to test cleanly: (a) set current AY to 2025-2026 via existing PUT /academic-years/{year}/set-current; (b) call GET /system/context — must show current_academic_year='2025-2026' and academic_years including 2024-2025 and 2025-2026; (c) attempt PUT rename '2024-2025' -> '2024-2025-old' as SUNF admin -> 403; (d) as superuser, rename '2024-2025' -> '2024-2025-old' -> 200 with cascaded counts > 0; (e) rename back '2024-2025-old' -> '2024-2025' to keep dummy data intact; (f) attempt DELETE '2025-2026' -> 400 (is current); (g) attempt DELETE '2024-2025' as SUNF admin -> 403; (h) as superuser, DELETE '2024-2025' without force -> 400 with dependency counts; DO NOT force-delete (would nuke SUNF's 2024-2025 gradebook seed). Just verify the 400 with counts. Also verify /students/{id}/report-fields still works (previous testing 100%). Do NOT test frontend."
+    - agent: "testing"
+      message: "✅ ACADEMIC YEAR MANAGEMENT + SYSTEM CONTEXT BACKEND TESTING COMPLETE (39/39 tests passed - 100% success rate): All new academic year management features working perfectly. Comprehensive testing covered 12 major test scenarios following the exact sequence specified in review request. SYSTEM CONTEXT: (1) GET /api/system/context for SUNF admin returns all required keys with correct values - school_code=SUNF, current_academic_year=2025-2026 (seeded), academic_years includes both 2024-2025 and 2025-2026, all_academic_years has proper structure with year/terms/is_enabled/is_current ✓, (2) GET /api/system/context for JTECH superuser returns school_code=JTECH, current_academic_year=2025-2026 ✓. RENAME RBAC & FUNCTIONALITY: (3) SUNF admin correctly blocked from renaming (403) ✓, (4) JTECH superuser successfully renames 2024-2025 to 2024-2025-old with cascaded counts (gradebook:149, social_skills:149, teacher_comments:0, classes:11) ✓, (5) GET /schools/{id} and GET /system/context both reflect the rename ✓, (6) Rename back to 2024-2025 successful (seed data preserved) ✓, (7) Rename to existing year correctly returns 400 'already exists' ✓, (8) Empty new_year correctly returns 400 ✓. DELETE RBAC & GUARDS: (9) Delete current AY (2025-2026) correctly refused with 400 ✓, (10) SUNF admin correctly blocked from deleting (403) ✓, (11) Delete without force correctly returns 400 with dependent records message and counts dict ✓, (12) Delete nonexistent year correctly returns 404 ✓. SANITY & REGRESSION: (13) GET /api/report-card/{student_id}?term=Term%201&academic_year=2025-2026 returns 200 with 10 subjects having actual scores (not empty), attendance_pct is non-null int ✓, (14) PUT /api/students/{id}/report-fields works perfectly with advisor/awards/personal_development persistence ✓. All RBAC controls, cascade logic, dependency guards, and error messages working as specified. Test file: /app/academic_year_test.py"
+
+  - task: "GET /api/system/context — bootstrap payload"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "New endpoint returns {school_code, school_id, school_name, current_academic_year, academic_years (enabled only), all_academic_years (full)}. Consumed by AuthContext.systemContext on every login/mount so all pages default to the correct AY. Fallback: if current_academic_year is empty, pick any is_current=true year, else first enabled."
+        - working: true
+          agent: "testing"
+          comment: "✅ COMPREHENSIVE TESTING COMPLETE (13/13 tests passed - 100%): GET /api/system/context endpoint working perfectly for all user types. SUNF ADMIN TESTS: (1) Endpoint returns 200 ✓, (2) Response has all required keys (school_code, school_id, school_name, current_academic_year, academic_years, all_academic_years) ✓, (3) school_code is SUNF ✓, (4) current_academic_year is 2025-2026 (seeded by scripts/seed_2025_2026.py) ✓, (5) academic_years is a list ✓, (6) academic_years includes 2024-2025 ✓, (7) academic_years includes 2025-2026 ✓, (8) all_academic_years is a list ✓, (9) all_academic_years length >= 2 ✓, (10) all_academic_years items have correct structure (year/terms/is_enabled/is_current) ✓. JTECH SUPERUSER TESTS: (11) Endpoint returns 200 ✓, (12) school_code is JTECH ✓, (13) current_academic_year is 2025-2026 ✓. All fields present and correctly populated. Test file: /app/academic_year_test.py"
+
+  - task: "Academic year rename + delete (superuser only)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "New endpoints: PUT /schools/{sid}/academic-years/{year} renames AY and cascades to gradebook/social_skills/teacher_comments/classes within the tenant. DELETE /schools/{sid}/academic-years/{year} refuses if it is the current AY (400) or if dependent records exist (400 with counts); pass ?force=true to cascade-delete. Both superuser only. Also added write_audit call to set-current."
+        - working: true
+          agent: "testing"
+          comment: "✅ COMPREHENSIVE TESTING COMPLETE (26/26 tests passed - 100%): All academic year management endpoints working perfectly with proper RBAC and cascade logic. RENAME TESTS: (1) SUNF admin blocked from renaming (403) ✓, (2) JTECH superuser can rename 2024-2025 to 2024-2025-old (200) ✓, (3) Response contains cascaded key with all required fields (gradebook=149, social_skills=149, teacher_comments=0, classes=11) ✓, (4) GET /schools/{id} shows renamed year ✓, (5) GET /system/context reflects rename ✓, (6) Rename back to 2024-2025 successful (seed data preserved) ✓, (7) Rename to existing year returns 400 with 'already exists' message ✓, (8) Empty new_year returns 400 ✓. DELETE TESTS: (9) Delete current AY (2025-2026) returns 400 with proper error message ✓, (10) SUNF admin blocked from deleting (403) ✓, (11) Delete without force returns 400 with dependent records message ✓, (12) Error message includes counts dict (gradebook:149, social_skills:149, teacher_comments:0, classes:11) ✓, (13) Delete nonexistent year returns 404 ✓. All RBAC controls (superuser-only), cascade updates, dependency checks, and error messages working as specified. Test file: /app/academic_year_test.py"
+
+frontend:
+  - task: "Global academic-year context + Student Profile Report Fields tab"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/context/AuthContext.js, frontend/src/hooks/useDefaultAcademicYear.js, frontend/src/pages/GradebookPage.js, frontend/src/pages/ReportsPage.js, frontend/src/pages/FormTeacherCommentsPage.js, frontend/src/pages/SocialSkillsManagerPage.js, frontend/src/pages/SchoolsPage.js, frontend/src/pages/StudentProfilePage.js, frontend/src/components/student-profile/ReportFieldsTab.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "AuthContext now fetches /system/context on login and mount, exposes currentAcademicYear + academicYears + refreshSystemContext(). New shared hook useDefaultAcademicYear auto-selects the school's current AY into a page's local selectedYear state on first mount. GradebookPage, ReportsPage, FormTeacherCommentsPage, SocialSkillsManagerPage all migrated. SchoolsPage AY tab now has Rename & Delete buttons (superuser only) that call the new endpoints and invoke refreshSystemContext so every page picks up the change instantly. NEW ReportFieldsTab.js under student profile: edits advisor/awards[]/personal_development{leadership_role, community_service_hours, cocurricular_intra, cocurricular_inter, conformity, grooming, courtesy, focus (0-6)}. Add-tag UI for awards with Enter key, remove chips with X. 6-dot rating widget for the four 0-6 ratings. Verified end-to-end via screenshots: Report card at /report-cards defaults to 2025-2026 and renders 12 real report cards with gradebook data; Report Fields tab loads seed values, saves via PUT /students/{id}/report-fields with success toast."
+
+  - task: "Seed 2025-2026 dummy data"
+    implemented: true
+    working: true
+    file: "scripts/seed_2025_2026.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "New idempotent seed script (a) populates schools' academic_years list with 2024-2025 and 2025-2026 and sets 2025-2026 as CURRENT for JTECH/SUNF/RVSD, (b) inserts gradebook per student × 3 terms × 10 subjects for 2025-2026 (891 rows across SUNF+RVSD; ability curves + wobble → realistic score distributions), (c) inserts social_skills per student × 3 terms (891 rows), (d) inserts ~30 school days of attendance in Sept-Nov 2025 (8910 rows). Report cards now render fully populated grade tables for the current default year."
 
 agent_communication:
     - agent: "main"
