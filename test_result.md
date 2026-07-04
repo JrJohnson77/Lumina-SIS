@@ -398,10 +398,72 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Ashcombe report template — SYSTEM default + 3-region endpoints"
+    - "Ashcombe report card renders with real data at GET /api/report-card/{id}"
+    - "RBAC: Superuser-only for header/body/footer; Admin-only for theme"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "NEW FEATURE (Ashcombe report template system). Backend additions to test: (1) GET /api/report-templates/system-default — returns the shared SYSTEM default template (Ashcombe style) with is_system_default=true, design_mode='ashcombe_default', header/body/footer sub-objects populated. Any authenticated user can call. (2) PUT /api/report-templates/{school_code}/header — SUPERUSER ONLY. Admin should get 403. Body: {mode, upload_image_url, design_elements, height_px}. Persists to the school's template document. (3) PUT /api/report-templates/{school_code}/footer — SUPERUSER ONLY. Same shape + show_signature_lines. (4) PUT /api/report-templates/{school_code}/body — SUPERUSER ONLY. Body: {layout, sections_enabled, subject_table_columns, theme}. (5) PUT /api/report-templates/{school_code}/theme — ADMIN or SUPERUSER. Payload: {primary_color, accent_color, font_heading, font_body, grade_scale}. Admin can only edit their OWN school (cross-tenant → 403). (6) POST /api/report-templates/{school_code}/clone-system-default — SUPERUSER ONLY. Overwrites school template with fresh Ashcombe clone. (7) Modified GET /api/report-card/{student_id}?term=&academic_year= — now returns extended payload: attendance_pct, overall_average, gpa, awards, personal_development, behavioural (aggregated from discipline_incidents by action_taken keyword), school{name/tagline/address/principal_name}, template (full report template document), advisor. (8) NEW PUT /api/students/{student_id}/report-fields — admin/teacher (permission manage_students). Body: {advisor?, advisor_id?, awards?, personal_development?}. Only whitelisted fields accepted. Test credentials: SUNF admin (admin/Admin@123), SUNF teacher (sarah.thompson.sunf/Teacher@123), JTECH superuser (jtech.innovations@outlook.com/Xekleidoma@1). Verify: (a) startup migration seeded SYSTEM template AND flipped SUNF/RVSD tenant templates to ashcombe_default with header/body/footer populated; (b) admin can update theme but cannot update header/body/footer (403); (c) superuser can update all regions across any school; (d) report-fields endpoint updates only whitelisted keys; (e) behavioural counters aggregate correctly from discipline_incidents (test students have ~1/4 with incidents seeded); (f) get_student_report_card returns full new payload shape."
+
+  - task: "Ashcombe report template — SYSTEM default + 3-region endpoints"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/ashcombe_template.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added Ashcombe-style default template as new SYSTEM default (is_system_default=true, design_mode='ashcombe_default'). New model fields: report_templates.header {mode, upload_image_url, design_elements, height_px}, .body {layout, sections_enabled, subject_table_columns, theme{primary_color, accent_color, font_heading, font_body, grade_scale}}, .footer {mode, upload_image_url, design_elements, height_px, show_signature_lines}. New endpoints: GET /api/report-templates/system-default (any auth user), PUT /api/report-templates/{sc}/header|body|footer (superuser only), PUT /api/report-templates/{sc}/theme (admin+superuser, own school only), POST /api/report-templates/{sc}/clone-system-default (superuser only). Startup migration seeds SYSTEM template and flips legacy/empty tenant templates to the new layout without wiping customized ones. build_default_template() now returns an Ashcombe clone so every newly-created school starts on the new layout."
+        - working: true
+          agent: "testing"
+          comment: "✅ COMPREHENSIVE TESTING COMPLETE (37/37 tests passed): All Ashcombe report template endpoints working perfectly. SYSTEM DEFAULT: (1) GET /api/report-templates/system-default returns correct structure with school_code=SYSTEM, is_system_default=true, design_mode=ashcombe_default ✓, (2) header.design_elements has 4 items (school_name, tagline, term_label, doc_title) ✓, (3) body.sections_enabled has 8 keys ✓, (4) body.subject_table_columns has 6 items ✓, (5) body.theme.grade_scale populated with letter/min/max/gpa ✓, (6) footer.design_elements has 2 items ✓, (7) footer.show_signature_lines=['principal','parent_guardian'] ✓. TENANT TEMPLATES: (8) GET /api/report-templates/SUNF auto-migrated to ashcombe_default with header/body/footer populated ✓. RBAC HEADER: (9) SUNF admin blocked (403) ✓, (10) Superuser can update header with height_px=150 persisted ✓. RBAC FOOTER: (11) SUNF admin blocked (403) ✓, (12) Superuser can update footer with show_signature_lines=['principal','parent_guardian','form_teacher'] persisted ✓. RBAC BODY: (13) Superuser can toggle sections_enabled.stats_cards=false ✓, (14) subject_table_columns updated to subset of 4 ✓. RBAC THEME: (15) SUNF admin can update theme (200) with primary_color persisted ✓, (16) SUNF admin blocked from RVSD theme (403) ✓, (17) Superuser can update any school theme ✓. CLONE: (18) SUNF admin blocked from cloning (403) ✓, (19) Superuser can clone system default (200) with ashcombe_default mode ✓. STARTUP MIGRATION: (20) SUNF has ashcombe_default mode with body populated ✓, (21) RVSD has ashcombe_default mode with body populated ✓. All access control, persistence, and migration working as specified."
+
+  - task: "Extended report card payload (Ashcombe fields)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "GET /api/report-card/{student_id} now returns: attendance_pct, overall_average, gpa (computed against template.body.theme.grade_scale), awards[], personal_development{}, behavioural{detentions,warnings,suspensions,other} (aggregated live from discipline_incidents by action_taken keyword match), advisor, school{name/tagline/address/principal_name}, template (full report_templates doc). New PUT /api/students/{id}/report-fields endpoint (whitelist: advisor, advisor_id, awards, personal_development). Student model extended with advisor, advisor_id, awards[], personal_development{}."
+        - working: true
+          agent: "testing"
+          comment: "✅ COMPREHENSIVE TESTING COMPLETE (25/25 tests passed): All extended report card features working perfectly. REPORT CARD PAYLOAD: (1) GET /api/report-card/{student_id}?term=Term%201&academic_year=2025-2026 returns 200 ✓, (2) attendance_pct field present (value: 100) ✓, (3) overall_average field present ✓, (4) gpa field present ✓, (5) awards field present (3 items seeded) ✓, (6) personal_development field present ✓, (7) behavioural object present with all counters ✓, (8) behavioural has detentions/warnings/suspensions/other keys ✓, (9) behavioural counters are non-negative ints (detentions=0, warnings=1, suspensions=0, other=0) ✓, (10) advisor field present (value: 'Jennifer Martinez') ✓, (11) school object present ✓, (12) school has name/tagline/address/principal_name ✓, (13) template object present ✓, (14) template is full report_templates doc with design_mode=ashcombe_default ✓. REPORT FIELDS UPDATE: (15) PUT /api/students/{id}/report-fields with advisor/awards/personal_development returns 200 ✓, (16) advisor='Test Advisor' persisted ✓, (17) awards=['Award A','Award B'] persisted ✓, (18) personal_development.leadership_role='Prefect' persisted ✓, (19) unknown_field NOT persisted (whitelist working) ✓, (20) advisor updated correctly to 'Updated Advisor' ✓, (21) Empty body returns 400 ✓, (22) Teacher access documented (200 - teachers have manage_students permission) ✓. All new fields, behavioural aggregation, and whitelist validation working as specified. Test file: /app/backend_test.py"
+
+frontend:
+  - task: "Ashcombe report card renderer + 3-region designer"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/AshcombeReportCard.jsx, frontend/src/pages/ReportTemplateDesignerV2.js, frontend/src/pages/ReportsPage.js, frontend/src/App.js, frontend/src/components/Layout.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "NEW files: AshcombeReportCard.jsx (forwardRef, theme-driven via CSS custom properties --report-primary/--report-accent/--report-font-heading/--report-font-body, renders Header/Body/Footer as stacked regions matching Ashcombe reference); ReportTemplateDesignerV2.js (3-tab designer: Header/Body/Footer with Upload/Design mode toggle, sections switches, subject column picker, theme editor, live preview using AshcombeReportCard with sample data). ReportsPage.js ReportCardRenderer dispatches to AshcombeReportCard when template.design_mode==='ashcombe_default'. App.js routes /report-template → V2 designer; /report-template/legacy → old canvas designer. Layout.js sidebar link for Report Designer is now superuser-only. Access control inside V2: layout tabs disabled for admin (only theme editor active); non-superuser hitting endpoints for header/body/footer/clone-system-default gets 403."
+
+  - task: "Extended seed data (advisor, awards, personal_development, teacher_comments, discipline)"
+    implemented: true
+    working: true
+    file: "scripts/seed_ashcombe_extras.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "New idempotent seed script seeds Ashcombe-relevant extras onto existing SUNF & RVSD students. Run results (2026-07-04): 297 students updated with advisor+awards+personal_development, 891 teacher_comments added (3 terms × ~297 students), 74 discipline incidents added (~1 per 4 students). Verified /api/report-card/{sunf_student_id} returns the full payload; Ashcombe layout renders correctly in ReportsPage."
 
 agent_communication:
     - agent: "main"
@@ -422,3 +484,5 @@ agent_communication:
       message: "✅ PUT /api/users/{user_id} ENDPOINT TESTING COMPLETE (8/9 tests passed): All core functionality working perfectly. Tested 6 scenarios + 1 regression test: (1) ✅ SUNF admin successfully updates SUNF teacher profile (first_name, phone, city_state) with proper persistence and name recomposition, (2) ✅ SUNF admin correctly blocked from updating RVSD user (403), (3) ✅ SUNF admin correctly blocked from updating superuser (403), (4) ✅ JTECH superuser successfully updates SUNF teacher, (5) ✅ Non-existent user returns 404, (6) ❌ Empty body validation: sends 200 instead of 400 (minor edge case - name recomposition logic triggers even with no fields), (7) ✅ Regression: PUT /api/students/{student_id} works perfectly. RECOMMENDATION: Endpoint is production-ready. The empty body validation is a minor issue that doesn't affect core functionality."
     - agent: "testing"
       message: "✅ REPORT MANAGER BACKEND TESTING COMPLETE (14/14 tests passed): All new Report Manager endpoints working perfectly. TEACHER COMMENTS: (1) POST /api/teacher-comments upserts correctly - saves new comment with {message, id} response ✓, (2) POST again with same student/term/year updates (no duplicate, same ID) ✓, (3) GET /api/teacher-comments/{student_id} retrieves saved comment ✓, (4) GET for student with no comment returns {comment: ''} not 404 ✓, (5) GET /api/teacher-comments/class/{class_id} returns bulk entries (14 students: 1 with comment, 13 empty) ✓, (6) Teacher can save comment for student in own class ✓, (7) Teacher blocked (403 'Student is not in your class') for student in different class ✓. SOCIAL SKILLS: (8) GET /api/social-skills/class/{class_id} returns correct structure with entries array ✓, (9) Non-existent class returns 404 ✓. REPORT CARD INTEGRATION: (10) GET /api/report-card/{student_id} includes teacher_comment field ✓, (11) GET /api/report-cards/class/{class_id} includes teacher_comment in all report cards ✓. All access control, upsert logic, bulk fetch, and report card integration working as specified. Test file: /app/report_manager_test.py"
+    - agent: "testing"
+      message: "✅ ASHCOMBE REPORT TEMPLATE BACKEND TESTING COMPLETE (62/62 tests passed - 100% success rate): All new Ashcombe report template features working perfectly. Comprehensive testing covered 10 major test scenarios: (1) System default template endpoint structure validation (14 assertions) ✓, (2) SUNF template auto-migration verification (5 assertions) ✓, (3) Header update RBAC - admin blocked, superuser allowed with persistence (4 assertions) ✓, (4) Footer update RBAC - admin blocked, superuser allowed with signature lines persistence (3 assertions) ✓, (5) Body update RBAC - superuser can toggle sections and update columns (3 assertions) ✓, (6) Theme update RBAC - admin can update own school, blocked from cross-tenant, superuser can update any (4 assertions) ✓, (7) Clone system default RBAC - admin blocked, superuser allowed (3 assertions) ✓, (8) Extended report card payload with all new Ashcombe fields (14 assertions) ✓, (9) Student report-fields endpoint with whitelist validation (8 assertions) ✓, (10) Startup migration verification for SUNF and RVSD (4 assertions) ✓. Sample data from live test: attendance_pct=100, awards=3 items, behavioural={detentions:0, warnings:1, suspensions:0, other:0}, advisor='Jennifer Martinez'. All RBAC controls, field persistence, whitelist validation, and startup migrations working as specified. Test file: /app/backend_test.py"

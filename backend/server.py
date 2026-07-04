@@ -21,6 +21,13 @@ import io
 import shutil
 import json
 
+from ashcombe_template import (
+    ASHCOMBE_BODY_DEFAULT,
+    ASHCOMBE_HEADER_ELEMENTS,
+    ASHCOMBE_FOOTER_ELEMENTS,
+    build_ashcombe_template,
+)
+
 ROOT_DIR = Path(__file__).parent
 UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -255,6 +262,14 @@ class StudentBase(BaseModel):
     teacher_comment: Optional[str] = ""
     photo_url: Optional[str] = ""
     family_members: Optional[List[FamilyMember]] = []
+    # Ashcombe-style report card fields
+    advisor: Optional[str] = ""         # Advisor / homeroom teacher (name)
+    advisor_id: Optional[str] = ""      # Optional link to a user
+    awards: Optional[List[str]] = []
+    personal_development: Optional[Dict[str, Any]] = {}
+    # personal_development keys: leadership_role, community_service_hours,
+    # cocurricular_intra, cocurricular_inter, conformity (0-6), grooming (0-6),
+    # courtesy (0-6), focus (0-6)
     # Keep old fields for backward compat
     address: Optional[str] = ""
     parent_id: Optional[str] = None
@@ -435,6 +450,38 @@ class ReportTemplateCreate(BaseModel):
     design_mode: Optional[str] = "canvas"
     canvas_elements: Optional[List[Dict]] = None
     background_url: Optional[str] = None
+    # Ashcombe 3-region designer fields (all optional so old payloads still validate)
+    template_name: Optional[str] = None
+    is_system_default: Optional[bool] = False
+    version: Optional[int] = 1
+    header: Optional[Dict] = None
+    body: Optional[Dict] = None
+    footer: Optional[Dict] = None
+
+
+class ReportTemplateThemeUpdate(BaseModel):
+    """Payload for admin-level theme tweaks (colors, fonts, grade scale).
+    Admins CANNOT edit layout / sections / regions via this endpoint —
+    that is superuser-only."""
+    primary_color: Optional[str] = None
+    accent_color: Optional[str] = None
+    font_heading: Optional[str] = None
+    font_body: Optional[str] = None
+    grade_scale: Optional[List[Dict]] = None
+
+
+class ReportTemplateRegionUpdate(BaseModel):
+    """Payload for superuser-only region edits (header/body/footer)."""
+    mode: Optional[str] = None  # 'upload' | 'design'
+    upload_image_url: Optional[str] = None
+    design_elements: Optional[List[Dict]] = None
+    height_px: Optional[int] = None
+    show_signature_lines: Optional[List[str]] = None
+    # body-only
+    layout: Optional[str] = None
+    sections_enabled: Optional[Dict[str, bool]] = None
+    subject_table_columns: Optional[List[str]] = None
+    theme: Optional[Dict] = None
 
 DEFAULT_SUBJECTS = [
     {"name": "English Language", "is_core": True},
@@ -500,32 +547,20 @@ DEFAULT_WEIGHTS = {
 }
 
 def build_default_template(school_code: str, school_name: str) -> dict:
-    """Build the Lumina-SIS default report template for a new school.
-    `design_mode='lumina_default'` tells the frontend to render
-    the polished LuminaDefaultReportCard component instead of the
-    legacy canvas/block renderers."""
-    return {
-        "id": str(uuid.uuid4()),
-        "school_code": school_code,
-        "school_name": school_name,
-        "school_motto": "",
-        "logo_url": "",
-        "header_text": "REPORT CARD",
-        "sub_header_text": "",
-        "design_mode": "lumina_default",
-        "is_locked_default": True,  # default cannot be deleted, only duplicated/replaced
-        "subjects": DEFAULT_SUBJECTS,
-        "grade_scale": DEFAULT_GRADE_SCALE,
-        "use_weighted_grading": False,
-        "assessment_weights": DEFAULT_WEIGHTS,
-        "sections": DEFAULT_SECTIONS,
-        "social_skills_categories": DEFAULT_SOCIAL_SKILLS,
-        "skill_ratings": ["Excellent", "Good", "Satisfactory", "Needs Improvement"],
-        "achievement_standards": DEFAULT_ACHIEVEMENT_STANDARDS,
-        "paper_size": "legal",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
+    """Build the default report template for a new school.
+
+    As of 2026-07 this is the Ashcombe-style 3-region template
+    (header + body + footer, theme-driven). It carries `design_mode='ashcombe_default'`
+    which is what the frontend `ReportCardRenderer` dispatches on.
+    The template is cloned from the shared SYSTEM default so every
+    tenant gets an identical starting point that they (or a superuser)
+    can then customize independently.
+    """
+    return build_ashcombe_template(
+        school_code=school_code,
+        template_name=f"{school_name} — Ashcombe Style",
+        is_system_default=False,
+    )
 
 # ==================== AUTH HELPERS ====================
 
@@ -1081,6 +1116,25 @@ async def delete_school_subject(
 
 # ==================== REPORT TEMPLATES (Superuser Only) ====================
 
+@api_router.get("/report-templates/system-default")
+async def get_system_default_template(current_user: dict = Depends(get_current_user)):
+    """Return the shared SYSTEM default template (Ashcombe style).
+    Any authenticated user can read it — it does not contain tenant data.
+    Auto-seeded on first call if missing."""
+    template = await db.report_templates.find_one(
+        {"school_code": "SYSTEM", "is_system_default": True}, {"_id": 0}
+    )
+    if not template:
+        template = build_ashcombe_template(
+            school_code="SYSTEM",
+            template_name="Default — Ashcombe Style",
+            is_system_default=True,
+        )
+        await db.report_templates.insert_one(dict(template))
+        template.pop("_id", None)
+    return template
+
+
 @api_router.get("/report-templates/{school_code}")
 async def get_report_template(school_code: str, current_user: dict = Depends(get_current_user)):
     """Get report template for a school. Any authenticated user can read their own school's template."""
@@ -1132,13 +1186,11 @@ async def update_report_template(
 @api_router.post("/report-templates/{school_code}/reset-default")
 async def reset_report_template_to_default(
     school_code: str,
-    current_user: dict = Depends(require_roles([UserRole.SUPERUSER, UserRole.ADMIN])),
+    current_user: dict = Depends(require_superuser()),
 ):
-    """Reset the school's report template back to the Lumina default.
-    Clears any canvas customizations. Superuser or school admin."""
+    """Reset the school's report template back to a fresh Ashcombe clone.
+    Clears any customizations. Superuser-only (layout is superuser-only)."""
     sc = school_code.upper()
-    if current_user["role"] != UserRole.SUPERUSER and current_user["school_code"] != sc:
-        raise HTTPException(status_code=403, detail="Cross-tenant access denied")
     school = await db.schools.find_one({"school_code": sc}, {"_id": 0})
     if not school:
         raise HTTPException(status_code=404, detail="School not found")
@@ -1152,7 +1204,145 @@ async def reset_report_template_to_default(
         }},
         upsert=True,
     )
-    await write_audit(current_user, "reset", "report_template", sc, f"{sc} reset to Lumina default")
+    await write_audit(current_user, "reset", "report_template", sc, f"{sc} reset to Ashcombe default")
+    updated = await db.report_templates.find_one({"school_code": sc}, {"_id": 0})
+    return updated
+
+
+# ---- 3-region designer: granular endpoints ----
+async def _get_or_seed_template(school_code: str) -> dict:
+    """Fetch a school's template, cloning from system default if missing."""
+    sc = school_code.upper()
+    tpl = await db.report_templates.find_one({"school_code": sc}, {"_id": 0})
+    if tpl:
+        return tpl
+    school = await db.schools.find_one({"school_code": sc}, {"_id": 0})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    tpl = build_default_template(sc, school.get("name", sc))
+    await db.report_templates.insert_one(dict(tpl))
+    tpl.pop("_id", None)
+    return tpl
+
+
+@api_router.put("/report-templates/{school_code}/header")
+async def update_template_header(
+    school_code: str,
+    payload: ReportTemplateRegionUpdate,
+    current_user: dict = Depends(require_superuser()),
+):
+    """PUT /report-templates/{school_code}/header — replace the header region.
+    Role: superuser only (layout editing is superuser-only)."""
+    sc = school_code.upper()
+    tpl = await _get_or_seed_template(sc)
+    header = dict(tpl.get("header") or {})
+    update = payload.model_dump(exclude_none=True)
+    # Only accept header-relevant keys
+    for k in ("mode", "upload_image_url", "design_elements", "height_px"):
+        if k in update:
+            header[k] = update[k]
+    await db.report_templates.update_one(
+        {"school_code": sc},
+        {"$set": {"header": header, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await write_audit(current_user, "update", "report_template", sc, f"{sc} header updated")
+    return {"header": header}
+
+
+@api_router.put("/report-templates/{school_code}/footer")
+async def update_template_footer(
+    school_code: str,
+    payload: ReportTemplateRegionUpdate,
+    current_user: dict = Depends(require_superuser()),
+):
+    """PUT /report-templates/{school_code}/footer — replace the footer region.
+    Role: superuser only."""
+    sc = school_code.upper()
+    tpl = await _get_or_seed_template(sc)
+    footer = dict(tpl.get("footer") or {})
+    update = payload.model_dump(exclude_none=True)
+    for k in ("mode", "upload_image_url", "design_elements", "height_px", "show_signature_lines"):
+        if k in update:
+            footer[k] = update[k]
+    await db.report_templates.update_one(
+        {"school_code": sc},
+        {"$set": {"footer": footer, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await write_audit(current_user, "update", "report_template", sc, f"{sc} footer updated")
+    return {"footer": footer}
+
+
+@api_router.put("/report-templates/{school_code}/body")
+async def update_template_body(
+    school_code: str,
+    payload: ReportTemplateRegionUpdate,
+    current_user: dict = Depends(require_superuser()),
+):
+    """PUT /report-templates/{school_code}/body — edit body layout / sections /
+    column set. Role: superuser only. (Admins should use /theme instead.)"""
+    sc = school_code.upper()
+    tpl = await _get_or_seed_template(sc)
+    body = dict(tpl.get("body") or {})
+    update = payload.model_dump(exclude_none=True)
+    for k in ("layout", "sections_enabled", "subject_table_columns"):
+        if k in update:
+            body[k] = update[k]
+    if "theme" in update:
+        body["theme"] = {**body.get("theme", {}), **(update["theme"] or {})}
+    await db.report_templates.update_one(
+        {"school_code": sc},
+        {"$set": {"body": body, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await write_audit(current_user, "update", "report_template", sc, f"{sc} body updated")
+    return {"body": body}
+
+
+@api_router.put("/report-templates/{school_code}/theme")
+async def update_template_theme(
+    school_code: str,
+    payload: ReportTemplateThemeUpdate,
+    current_user: dict = Depends(require_roles([UserRole.ADMIN])),
+):
+    """PUT /report-templates/{school_code}/theme — edit only body.theme
+    (colors, fonts, grade scale). Role: admin/superuser.
+    Admins can re-skin their OWN school; layout stays locked."""
+    sc = school_code.upper()
+    if current_user["role"] != UserRole.SUPERUSER and current_user["school_code"] != sc:
+        raise HTTPException(status_code=403, detail="Cross-tenant access denied")
+    tpl = await _get_or_seed_template(sc)
+    body = dict(tpl.get("body") or {})
+    theme = dict(body.get("theme") or {})
+    update = payload.model_dump(exclude_none=True)
+    theme.update(update)
+    body["theme"] = theme
+    await db.report_templates.update_one(
+        {"school_code": sc},
+        {"$set": {"body": body, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await write_audit(current_user, "update", "report_template", sc, f"{sc} theme updated")
+    return {"theme": theme}
+
+
+@api_router.post("/report-templates/{school_code}/clone-system-default")
+async def clone_system_default_for_school(
+    school_code: str,
+    current_user: dict = Depends(require_superuser()),
+):
+    """POST /report-templates/{school_code}/clone-system-default — overwrite a
+    school's template with a fresh clone of the SYSTEM default. Superuser only."""
+    sc = school_code.upper()
+    school = await db.schools.find_one({"school_code": sc}, {"_id": 0})
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    fresh = build_ashcombe_template(
+        school_code=sc,
+        template_name=f"{school.get('name', sc)} — Ashcombe Style",
+        is_system_default=False,
+    )
+    await db.report_templates.update_one(
+        {"school_code": sc}, {"$set": fresh}, upsert=True
+    )
+    await write_audit(current_user, "clone", "report_template", sc, f"{sc} cloned from SYSTEM default")
     updated = await db.report_templates.find_one({"school_code": sc}, {"_id": 0})
     return updated
 
@@ -1502,6 +1692,33 @@ async def update_student(student_id: str, student: StudentCreate, current_user: 
     updated["age"] = age
     await write_audit(current_user, "update", "student", student_id, f"{updated.get('first_name','')} {updated.get('last_name','')}")
     return StudentResponse(**updated)
+
+@api_router.put("/students/{student_id}/report-fields")
+async def update_student_report_fields(
+    student_id: str,
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_permission("manage_students")),
+):
+    """PUT /students/{id}/report-fields — update just the Ashcombe report-card
+    fields (advisor, awards[], personal_development{}). School-scoped."""
+    query = {"id": student_id, "school_code": current_user["school_code"]}
+    existing = await db.students.find_one(query, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Student not found")
+    allowed = {"advisor", "advisor_id", "awards", "personal_development"}
+    update = {k: v for k, v in payload.items() if k in allowed}
+    if not update:
+        raise HTTPException(status_code=400, detail="No report-card fields provided")
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.students.update_one(query, {"$set": update})
+    updated = await db.students.find_one(query, {"_id": 0})
+    updated["age"] = calculate_age(updated.get("date_of_birth", ""))
+    await write_audit(
+        current_user, "update", "student", student_id,
+        f"{updated.get('first_name','')} {updated.get('last_name','')} · report fields",
+    )
+    return StudentResponse(**updated)
+
 
 @api_router.delete("/students/{student_id}")
 async def delete_student(student_id: str, current_user: dict = Depends(require_permission("manage_students"))):
@@ -1935,16 +2152,104 @@ async def get_student_report_card(
         "academic_year": academic_year,
         "school_code": current_user["school_code"]
     }, {"_id": 0})
-    
+
+    # Behavioural counters — aggregate from discipline_incidents for this student.
+    # Currently we scope to the same academic_year; term filtering is left
+    # loose because incident.date is a free-form YYYY-MM-DD.
+    incidents = await db.discipline_incidents.find({
+        "school_code": current_user["school_code"],
+        "student_id": student_id,
+    }, {"_id": 0, "type": 1, "date": 1, "action_taken": 1}).to_list(500)
+    behavioural = {"detentions": 0, "warnings": 0, "suspensions": 0, "other": 0}
+    for inc in incidents:
+        action = (inc.get("action_taken") or "").lower()
+        itype = (inc.get("type") or "").lower()
+        if "detention" in action:
+            behavioural["detentions"] += 1
+        elif "warning" in action or itype == "minor":
+            behavioural["warnings"] += 1
+        elif "suspension" in action or "suspend" in action:
+            behavioural["suspensions"] += 1
+        else:
+            behavioural["other"] += 1
+
+    # School info (for header/footer tokens)
+    school_doc = await db.schools.find_one(
+        {"school_code": current_user["school_code"]}, {"_id": 0}
+    ) or {}
+
+    # Report template
+    template = await db.report_templates.find_one(
+        {"school_code": current_user["school_code"]}, {"_id": 0}
+    )
+    if not template:
+        template = build_default_template(
+            current_user["school_code"], school_doc.get("name", current_user["school_code"])
+        )
+        await db.report_templates.insert_one(dict(template))
+        template.pop("_id", None)
+
+    # Overall averages / GPA (from gradebook.subjects[] weighted overall scores)
+    overall_average = None
+    gpa = None
+    if gradebook:
+        subjects = gradebook.get("subjects") or []
+        # Prefer explicitly-stored overall_score if present
+        if gradebook.get("overall_score") is not None:
+            overall_average = round(float(gradebook["overall_score"]))
+        else:
+            scores = [s.get("score") for s in subjects if isinstance(s.get("score"), (int, float))]
+            if scores:
+                overall_average = round(sum(scores) / len(scores))
+        # GPA — use the template grade_scale if present, else legacy scheme
+        scale = (
+            (template.get("body") or {}).get("theme", {}).get("grade_scale")
+            if template else None
+        ) or []
+        def _score_to_gpa(sc: float) -> float:
+            for band in scale:
+                if band.get("min", 0) <= sc <= band.get("max", 100):
+                    return float(band.get("gpa", 0))
+            return 0.0
+        if scale and subjects:
+            gpas = [
+                _score_to_gpa(float(s["score"]))
+                for s in subjects
+                if isinstance(s.get("score"), (int, float))
+            ]
+            if gpas:
+                gpa = round(sum(gpas) / len(gpas), 1)
+
+    # Attendance percentage
+    total = attendance_summary["total_days"] or 0
+    present_plus_late = attendance_summary["present"] + attendance_summary["late"]
+    attendance_pct = round((present_plus_late / total) * 100) if total else None
+
     return {
         "student": student,
         "grades": gradebook or {},
         "attendance_summary": attendance_summary,
+        "attendance_pct": attendance_pct,
+        "overall_average": overall_average,
+        "gpa": gpa,
         "class_info": class_info,
         "term": term,
         "academic_year": academic_year,
         "grading_scheme": GRADING_SCHEME,
-        "teacher_comment": comment_doc.get("comment", "") if comment_doc else ""
+        "teacher_comment": comment_doc.get("comment", "") if comment_doc else "",
+        "awards": student.get("awards") or [],
+        "personal_development": student.get("personal_development") or {},
+        "behavioural": behavioural,
+        "advisor": student.get("advisor") or class_info.get("teacher_name", ""),
+        "school": {
+            "code": school_doc.get("school_code", current_user["school_code"]),
+            "name": school_doc.get("name", ""),
+            "tagline": school_doc.get("tagline", "") or school_doc.get("motto", ""),
+            "address": school_doc.get("address", ""),
+            "logo_url": school_doc.get("logo_url", ""),
+            "principal_name": school_doc.get("principal_name", ""),
+        },
+        "template": template,
     }
 
 @api_router.get("/report-cards/class/{class_id}")
@@ -3986,32 +4291,63 @@ logger = logging.getLogger(__name__)
 async def startup_migrations():
     """One-time/idempotent migrations to keep the data in shape."""
     logger = logging.getLogger(__name__)
-    # Flip any school whose template hasn't been canvas-customized over to the
-    # Lumina default so they see the new pre-built design. We catch:
-    #   - templates with no design_mode set
-    #   - legacy "blocks"/"default" templates
-    #   - canvas templates with zero elements (effectively empty)
+    # 1) Seed the shared SYSTEM Ashcombe default template if missing.
+    try:
+        sys_tpl = await db.report_templates.find_one(
+            {"school_code": "SYSTEM", "is_system_default": True}, {"_id": 0}
+        )
+        if not sys_tpl:
+            await db.report_templates.insert_one(
+                dict(build_ashcombe_template(
+                    school_code="SYSTEM",
+                    template_name="Default — Ashcombe Style",
+                    is_system_default=True,
+                ))
+            )
+            logger.info("[migration] seeded SYSTEM Ashcombe default template")
+    except Exception as e:
+        logger.warning(f"[migration] SYSTEM template seed failed: {e}")
+
+    # 2) Flip any legacy/empty tenant template over to the new Ashcombe layout.
+    #    We only touch templates that have never been customized (no canvas_elements,
+    #    no explicit body block).
     try:
         result = await db.report_templates.update_many(
             {
+                "school_code": {"$ne": "SYSTEM"},
                 "$or": [
-                    {"design_mode": {"$in": [None, "blocks", "default"]}},
+                    {"design_mode": {"$in": [None, "blocks", "default", "lumina_default"]}},
                     {"design_mode": "canvas", "canvas_elements": {"$exists": False}},
                     {"design_mode": "canvas", "canvas_elements": {"$size": 0}},
                 ],
+                "body": {"$exists": False},
             },
             {"$set": {
-                "design_mode": "lumina_default",
+                "design_mode": "ashcombe_default",
                 "is_locked_default": True,
                 "canvas_elements": [],
                 "blocks": [],
+                "header": {
+                    "mode": "design",
+                    "upload_image_url": None,
+                    "design_elements": [dict(e) for e in ASHCOMBE_HEADER_ELEMENTS],
+                    "height_px": 120,
+                },
+                "body": {**ASHCOMBE_BODY_DEFAULT},
+                "footer": {
+                    "mode": "design",
+                    "upload_image_url": None,
+                    "design_elements": [dict(e) for e in ASHCOMBE_FOOTER_ELEMENTS],
+                    "height_px": 90,
+                    "show_signature_lines": ["principal", "parent_guardian"],
+                },
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }},
         )
         if result.modified_count:
-            logger.info(f"[migration] flipped {result.modified_count} report templates to lumina_default")
+            logger.info(f"[migration] flipped {result.modified_count} tenant templates to ashcombe_default")
     except Exception as e:
-        logger.warning(f"[migration] report_templates flip failed: {e}")
+        logger.warning(f"[migration] tenant template flip failed: {e}")
 
 
 @app.on_event("shutdown")

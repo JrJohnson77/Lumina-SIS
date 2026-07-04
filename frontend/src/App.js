@@ -19,6 +19,7 @@ import UsersPage from "./pages/UsersPage";
 import StaffProfilePage from "./pages/StaffProfilePage";
 import ImportExportPage from "./pages/ImportExportPage";
 import ReportTemplateDesigner from "./pages/ReportTemplateDesigner";
+import ReportTemplateDesignerV2 from "./pages/ReportTemplateDesignerV2";
 import AdmissionsPage from "./pages/AdmissionsPage";
 import HealthPage from "./pages/HealthPage";
 import DisciplinePage from "./pages/DisciplinePage";
@@ -207,6 +208,14 @@ function AppRoutes() {
                 path="/report-template" 
                 element={
                     <ProtectedRoute allowedRoles={['superuser', 'admin']}>
+                        <ReportTemplateDesignerV2 />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/report-template/legacy" 
+                element={
+                    <ProtectedRoute allowedRoles={['superuser']}>
                         <ReportTemplateDesigner />
                     </ProtectedRoute>
                 } 

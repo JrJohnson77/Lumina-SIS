@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import LuminaDefaultReportCard from '../components/LuminaDefaultReportCard';
+import AshcombeReportCard from '../components/AshcombeReportCard';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -299,8 +300,19 @@ const CanvasReportCard = ({ data, classInfo, term, academicYear, totalStudents, 
 // ==================== DYNAMIC REPORT CARD (dispatch) ====================
 const ReportCardRenderer = (props) => {
     const { template } = props;
-    // Lumina default — the polished pre-built template, used by every school
-    // until they explicitly customize via the WYSIWYG designer.
+
+    // Ashcombe 3-region default (current system default) — merge `school` prop
+    // into `data` if the backend didn't already include it.
+    if (template && template.design_mode === 'ashcombe_default') {
+        const mergedData = {
+            ...props.data,
+            school: props.data?.school || props.school || {},
+            class_info: props.data?.class_info || props.classInfo || {},
+        };
+        return <AshcombeReportCard data={mergedData} template={template} />;
+    }
+
+    // Lumina default (legacy) — kept for schools still on the old template.
     if (!template || template.design_mode === 'lumina_default') {
         return <LuminaDefaultReportCard {...props} />;
     }
@@ -312,8 +324,8 @@ const ReportCardRenderer = (props) => {
     if (template.design_mode === 'blocks' && template.blocks?.length) {
         return <DynamicReportCard {...props} />;
     }
-    // Fallback: Lumina default
-    return <LuminaDefaultReportCard {...props} />;
+    // Fallback: Ashcombe default (matches new system default)
+    return <AshcombeReportCard data={props.data} template={template} />;
 };
 
 // ==================== BLOCK-BASED REPORT CARD TEMPLATE ====================
