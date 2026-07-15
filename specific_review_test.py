@@ -9,7 +9,7 @@ import json
 import sys
 
 # API base URL from frontend configuration
-BASE_URL = "https://full-audit-guide.preview.emergentagent.com/api"
+BASE_URL = "https://mhps-report-build.preview.emergentagent.com/api"
 
 class ReviewRequestTester:
     def __init__(self):
