@@ -30,3 +30,16 @@
 ## Notes
 - The backend automatically creates the JTECH superuser on every startup if missing.
 - Other schools (SUNF, RVSD) and their dummy data must be re-seeded if needed.
+
+## Mona Heights Primary School (MHPS) — MHPS Upper School Report Card
+- **School Code:** MHPS
+- **Admin Username:** admin
+- **Admin Password:** Admin@123
+- **Teacher Username:** akua.mensah (or any MHPS teacher, e.g. from users list)
+- **Teacher Password:** Teacher@123
+- Seed base data via: `python /app/scripts/seed_mhps_data.py`
+- Seed the MHPS Upper School template + comment bank + report_cards via:
+  `python /app/scripts/seed_mhps_template.py`
+- Seeded report_cards exist for Grades 4-6 students, term="Term 1", academic_year="2024-2025".
+- MHPS endpoints are tenant-locked to school_code=MHPS (superuser bypasses).
+

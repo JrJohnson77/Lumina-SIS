@@ -27,6 +27,13 @@ from ashcombe_template import (
     ASHCOMBE_FOOTER_ELEMENTS,
     build_ashcombe_template,
 )
+from mhps_report import (
+    MHPS_SCHOOL_CODE,
+    build_mhps_template,
+    build_mhps_settings,
+    compute_report_card,
+    seed_comment_docs,
+)
 
 ROOT_DIR = Path(__file__).parent
 UPLOAD_DIR = ROOT_DIR / "uploads"
@@ -1493,6 +1500,298 @@ async def clone_system_default_for_school(
     await write_audit(current_user, "clone", "report_template", sc, f"{sc} cloned from SYSTEM default")
     updated = await db.report_templates.find_one({"school_code": sc}, {"_id": 0})
     return updated
+
+
+# ==================== MHPS UPPER SCHOOL TEMPLATE (tenant-locked) ====================
+# Everything below is locked to school_code == "MHPS". Superusers bypass the
+# tenant check (per the existing RBAC pattern). None of this touches the
+# Ashcombe / SYSTEM default used by every other school.
+
+def _assert_mhps_access(current_user: dict):
+    """Only MHPS users (or a superuser) may touch the MHPS template."""
+    if current_user.get("role") == UserRole.SUPERUSER:
+        return
+    if (current_user.get("school_code") or "").upper() != MHPS_SCHOOL_CODE:
+        raise HTTPException(status_code=403, detail="MHPS report template is not available for this school")
+
+
+async def _get_or_create_mhps_template() -> dict:
+    tpl = await db.report_templates.find_one(
+        {"school_code": MHPS_SCHOOL_CODE, "design_mode": "mhps_upper"}, {"_id": 0}
+    )
+    if not tpl:
+        school = await db.schools.find_one({"school_code": MHPS_SCHOOL_CODE}, {"_id": 0}) or {}
+        tpl = build_mhps_template(MHPS_SCHOOL_CODE, school.get("name", "Mona Heights Primary School"))
+        await db.report_templates.update_one(
+            {"school_code": MHPS_SCHOOL_CODE}, {"$set": tpl}, upsert=True
+        )
+        tpl.pop("_id", None)
+    # ensure settings sub-doc exists
+    if not tpl.get("mhps_settings"):
+        tpl["mhps_settings"] = build_mhps_settings()
+        await db.report_templates.update_one(
+            {"school_code": MHPS_SCHOOL_CODE},
+            {"$set": {"mhps_settings": tpl["mhps_settings"]}},
+        )
+    return tpl
+
+
+@api_router.get("/mhps/report-template")
+async def get_mhps_template(current_user: dict = Depends(get_current_user)):
+    """Return the tenant-locked MHPS Upper School template + comment bank."""
+    _assert_mhps_access(current_user)
+    tpl = await _get_or_create_mhps_template()
+    comments = await db.comment_bank.find(
+        {"school_code": MHPS_SCHOOL_CODE}, {"_id": 0}
+    ).sort("order", 1).to_list(500)
+    tpl["comment_bank"] = comments
+    return tpl
+
+
+# ---- Structure edits: SUPERUSER ONLY (subjects / components / grade scope) ----
+@api_router.put("/mhps/report-template/structure")
+async def update_mhps_structure(
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_superuser()),
+):
+    await _get_or_create_mhps_template()
+    allowed = {"subjects", "core_subjects", "components", "component_weights", "theme"}
+    settings_update = {f"mhps_settings.{k}": v for k, v in payload.items() if k in allowed}
+    top_allowed = {"grade_scope", "template_name", "header_text", "sub_header_text"}
+    top_update = {k: v for k, v in payload.items() if k in top_allowed}
+    if not settings_update and not top_update:
+        raise HTTPException(status_code=400, detail="No structural fields provided")
+    update = {**settings_update, **top_update, "updated_at": datetime.now(timezone.utc).isoformat()}
+    await db.report_templates.update_one({"school_code": MHPS_SCHOOL_CODE}, {"$set": update})
+    await write_audit(current_user, "update", "report_template", MHPS_SCHOOL_CODE, "MHPS structure")
+    return await _get_or_create_mhps_template()
+
+
+# ---- Config-content edits: MHPS ADMIN (own school) or SUPERUSER ----
+@api_router.put("/mhps/report-template/settings")
+async def update_mhps_settings(
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_roles(["admin"])),
+):
+    _assert_mhps_access(current_user)
+    await _get_or_create_mhps_template()
+    allowed = {
+        "houses", "academic_grade_scale", "achievement_bands", "rating_scale",
+        "work_ethics_criteria", "social_skills_criteria", "principal_signature_block",
+        "core_subjects",
+    }
+    update = {f"mhps_settings.{k}": v for k, v in payload.items() if k in allowed}
+    if not update:
+        raise HTTPException(status_code=400, detail="No configurable settings provided")
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.report_templates.update_one({"school_code": MHPS_SCHOOL_CODE}, {"$set": update})
+    await write_audit(current_user, "update", "report_template", MHPS_SCHOOL_CODE, "MHPS settings")
+    return await _get_or_create_mhps_template()
+
+
+# ---- Comment bank ----
+@api_router.get("/mhps/comment-bank")
+async def get_mhps_comment_bank(current_user: dict = Depends(get_current_user)):
+    _assert_mhps_access(current_user)
+    comments = await db.comment_bank.find(
+        {"school_code": MHPS_SCHOOL_CODE}, {"_id": 0}
+    ).sort("order", 1).to_list(500)
+    return {"comments": comments}
+
+
+@api_router.post("/mhps/comment-bank")
+async def add_mhps_comment(
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_roles(["admin"])),
+):
+    _assert_mhps_access(current_user)
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Comment text is required")
+    count = await db.comment_bank.count_documents({"school_code": MHPS_SCHOOL_CODE})
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "school_code": MHPS_SCHOOL_CODE,
+        "text": text,
+        "order": payload.get("order", count),
+        "active": payload.get("active", True),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.comment_bank.insert_one(dict(doc))
+    await write_audit(current_user, "create", "comment_bank", doc["id"], text[:60])
+    return doc
+
+
+@api_router.put("/mhps/comment-bank/{comment_id}")
+async def update_mhps_comment(
+    comment_id: str,
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_roles(["admin"])),
+):
+    _assert_mhps_access(current_user)
+    query = {"id": comment_id, "school_code": MHPS_SCHOOL_CODE}
+    existing = await db.comment_bank.find_one(query, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    allowed = {"text", "order", "active"}
+    update = {k: v for k, v in payload.items() if k in allowed}
+    if not update:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.comment_bank.update_one(query, {"$set": update})
+    await write_audit(current_user, "update", "comment_bank", comment_id, update.get("text", ""))
+    return await db.comment_bank.find_one(query, {"_id": 0})
+
+
+@api_router.delete("/mhps/comment-bank/{comment_id}")
+async def delete_mhps_comment(
+    comment_id: str,
+    current_user: dict = Depends(require_roles(["admin"])),
+):
+    _assert_mhps_access(current_user)
+    query = {"id": comment_id, "school_code": MHPS_SCHOOL_CODE}
+    result = await db.comment_bank.delete_one(query)
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    await write_audit(current_user, "delete", "comment_bank", comment_id, "")
+    return {"message": "Comment deleted"}
+
+
+# ---- Per-student report-card record (view + teacher entry) ----
+async def _build_mhps_report_payload(student_id: str, term: str, academic_year: str,
+                                      current_user: dict) -> dict:
+    tpl = await _get_or_create_mhps_template()
+    settings = tpl.get("mhps_settings") or build_mhps_settings()
+
+    student = await db.students.find_one(
+        {"id": student_id, "school_code": MHPS_SCHOOL_CODE}, {"_id": 0}
+    )
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    student["age"] = calculate_age(student.get("date_of_birth", ""))
+
+    class_info = {}
+    if student.get("class_id"):
+        class_info = await db.classes.find_one(
+            {"id": student["class_id"], "school_code": MHPS_SCHOOL_CODE}, {"_id": 0}
+        ) or {}
+        if class_info.get("teacher_id"):
+            t = await db.users.find_one({"id": class_info["teacher_id"]}, {"_id": 0, "name": 1})
+            if t:
+                class_info["teacher_name"] = t.get("name", "")
+
+    record = await db.report_cards.find_one({
+        "student_id": student_id, "term": term, "academic_year": academic_year,
+        "school_code": MHPS_SCHOOL_CODE,
+    }, {"_id": 0}) or {}
+
+    computed = compute_report_card(record, settings) if record else {}
+
+    comments = await db.comment_bank.find(
+        {"school_code": MHPS_SCHOOL_CODE}, {"_id": 0}
+    ).sort("order", 1).to_list(500)
+
+    school_doc = await db.schools.find_one({"school_code": MHPS_SCHOOL_CODE}, {"_id": 0}) or {}
+
+    return {
+        "student": student,
+        "class_info": class_info,
+        "term": term,
+        "academic_year": academic_year,
+        "report_card": computed,
+        "settings": settings,
+        "comment_bank": comments,
+        "template": tpl,
+        "school": {
+            "code": school_doc.get("school_code", MHPS_SCHOOL_CODE),
+            "name": school_doc.get("name", "Mona Heights Primary School"),
+            "tagline": school_doc.get("tagline", "") or school_doc.get("motto", ""),
+            "address": school_doc.get("address", ""),
+            "logo_url": school_doc.get("logo_url", ""),
+            "principal_name": school_doc.get("principal_name", ""),
+        },
+    }
+
+
+@api_router.get("/mhps/report-card/{student_id}")
+async def get_mhps_report_card(
+    student_id: str,
+    term: str,
+    academic_year: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Full merged MHPS report-card payload (student + record + settings +
+    comment bank). Any MHPS user (teacher/admin/parent) + superuser."""
+    _assert_mhps_access(current_user)
+    return await _build_mhps_report_payload(student_id, term, academic_year, current_user)
+
+
+@api_router.put("/mhps/report-card/{student_id}")
+async def upsert_mhps_report_card(
+    student_id: str,
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_permission("manage_students")),
+):
+    """Teacher/Admin: create/update the MHPS report-card record for a student.
+    Also persists MHPS profile fields to the student document."""
+    _assert_mhps_access(current_user)
+    student = await db.students.find_one(
+        {"id": student_id, "school_code": MHPS_SCHOOL_CODE}, {"_id": 0}
+    )
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    term = payload.get("term")
+    academic_year = payload.get("academic_year")
+    if not term or not academic_year:
+        raise HTTPException(status_code=400, detail="term and academic_year are required")
+
+    # Profile fields go on the student document
+    profile_fields = {}
+    for k in ("house", "reading_level", "post_of_special_responsibility",
+              "extra_curricular_activities"):
+        if k in payload:
+            profile_fields[k] = payload[k]
+    if profile_fields:
+        profile_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.students.update_one(
+            {"id": student_id, "school_code": MHPS_SCHOOL_CODE}, {"$set": profile_fields}
+        )
+
+    # Report-card record fields
+    record_allowed = {
+        "subjects", "achievement_standards", "performance_task", "behavior_ratings",
+        "selected_comments", "additional_comments", "number_of_students_in_class",
+        "position_in_class", "days_in_term", "days_absent", "term_label",
+        "report_period_label", "overall_average_override",
+    }
+    record = {k: v for k, v in payload.items() if k in record_allowed}
+    now = datetime.now(timezone.utc).isoformat()
+    query = {
+        "student_id": student_id, "term": term, "academic_year": academic_year,
+        "school_code": MHPS_SCHOOL_CODE,
+    }
+    existing = await db.report_cards.find_one(query, {"_id": 0})
+    if existing:
+        record["updated_at"] = now
+        record["updated_by"] = current_user["id"]
+        await db.report_cards.update_one(query, {"$set": record})
+    else:
+        record.update({
+            "id": str(uuid.uuid4()),
+            **query,
+            "class_id": student.get("class_id"),
+            "created_at": now,
+            "updated_at": now,
+            "updated_by": current_user["id"],
+        })
+        await db.report_cards.insert_one(dict(record))
+
+    await write_audit(current_user, "update", "report_card", student_id,
+                      f"{student.get('first_name','')} {student.get('last_name','')} · {term}")
+    return await _build_mhps_report_payload(student_id, term, academic_year, current_user)
 
 
 # ==================== USER MANAGEMENT ====================

@@ -95,6 +95,7 @@ const NAV_GROUPS = [
             { to: '/report-manager/comments', label: "Form Teacher's Comment", icon: MessageSquare, roles: ['superuser', 'admin', 'teacher'] },
             { to: '/report-manager/social-skills', label: 'Social Skills', icon: Sparkles, roles: ['superuser', 'admin', 'teacher'] },
             { to: '/reports', label: 'Term Report Generation', icon: FileText, roles: ['superuser', 'admin', 'teacher'] },
+            { to: '/mhps-report-cards', label: 'MHPS Report Card', icon: FileText, roles: ['superuser', 'admin', 'teacher', 'parent'], schools: ['MHPS'] },
         ],
     },
     {
@@ -173,8 +174,12 @@ const NavLink = ({ item, isActive, onNavigate, collapsed }) => {
     );
 };
 
-const NavGroup = ({ group, isOpen, onToggle, role, currentPath, onNavigate, collapsed }) => {
-    const visibleItems = group.items.filter((item) => item.roles.includes(role));
+const NavGroup = ({ group, isOpen, onToggle, role, schoolCode, currentPath, onNavigate, collapsed }) => {
+    const visibleItems = group.items.filter(
+        (item) =>
+            item.roles.includes(role) &&
+            (!item.schools || role === 'superuser' || item.schools.includes(schoolCode))
+    );
     if (visibleItems.length === 0) return null;
     const GroupIcon = group.icon;
     const isAnyActive = visibleItems.some((i) => currentPath === i.to);
@@ -400,6 +405,7 @@ export const Layout = ({ children }) => {
                                 isOpen={openGroups.has(group.key)}
                                 onToggle={toggleGroup}
                                 role={user?.role}
+                                schoolCode={schoolCode}
                                 currentPath={location.pathname}
                                 onNavigate={closeMobileSidebar}
                                 collapsed={collapsed}

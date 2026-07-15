@@ -302,6 +302,18 @@ const CanvasReportCard = ({ data, classInfo, term, academicYear, totalStudents, 
 const ReportCardRenderer = (props) => {
     const { template } = props;
 
+    // MHPS Upper School template uses its own data model (report_cards) and a
+    // dedicated page — don't try to render it here with gradebook-shaped data.
+    if (template && template.design_mode === 'mhps_upper') {
+        return (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+                This school uses the <b>MHPS Upper School Report Card</b>. Please use the
+                &nbsp;<span className="font-semibold">Report Manager &rarr; MHPS Report Card</span>&nbsp;
+                page to enter data and generate reports.
+            </div>
+        );
+    }
+
     // Ashcombe 3-region default (current system default) — merge `school` prop
     // into `data` if the backend didn't already include it.
     if (template && template.design_mode === 'ashcombe_default') {

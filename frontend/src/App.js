@@ -27,6 +27,7 @@ import ReEnrollmentPage from "./pages/ReEnrollmentPage";
 import AuditLogPage from "./pages/AuditLogPage";
 import FormTeacherCommentsPage from "./pages/FormTeacherCommentsPage";
 import SocialSkillsManagerPage from "./pages/SocialSkillsManagerPage";
+import MHPSReportCardsPage from "./pages/MHPSReportCardsPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsOfUsePage from "./pages/TermsOfUsePage";
 import { Loader2 } from "lucide-react";
@@ -201,6 +202,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute allowedRoles={['superuser', 'admin', 'teacher']}>
                         <SocialSkillsManagerPage />
+                    </ProtectedRoute>
+                } 
+            />
+            <Route 
+                path="/mhps-report-cards" 
+                element={
+                    <ProtectedRoute allowedRoles={['superuser', 'admin', 'teacher', 'parent']}>
+                        <MHPSReportCardsPage />
                     </ProtectedRoute>
                 } 
             />
