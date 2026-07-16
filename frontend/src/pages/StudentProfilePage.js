@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,8 @@ import {
     Mail,
     BarChart3,
     Loader2,
+    PanelLeftClose,
+    PanelLeftOpen,
 } from 'lucide-react';
 import '../styles/student-profile.css';
 
@@ -79,6 +81,10 @@ const TABS = [
     { key: 'school',     label: 'School' },
 ];
 
+// Left-accent color per section: navy for academic/attendance-type data, blue otherwise.
+const NAVY_SECTIONS = new Set(['academics', 'attendance', 'behavior', 'medical']);
+const accentFor = (key) => (NAVY_SECTIONS.has(key) ? 'navy' : 'blue');
+
 const matchesGradeFilter = (student, classMap, grade) => {
     if (!grade || grade === 'All Grades') return true;
     const cls = classMap.get(student.class_id);
@@ -130,6 +136,25 @@ export default function StudentProfilePage() {
         const hash = window.location.hash.replace('#', '');
         return TABS.find((t) => t.key === hash) ? hash : 'dashboard';
     });
+
+    // Collapsible roster rail
+    const [rosterCollapsed, setRosterCollapsed] = useState(false);
+
+    // Refs to each stacked section + the scroll container (for chip scroll-spy)
+    const sectionRefs = useRef({});
+    const mainScrollRef = useRef(null);
+    const isScrollingByClick = useRef(false);
+
+    // Scroll a section into view when a chip is clicked
+    const scrollToSection = useCallback((key) => {
+        const el = sectionRefs.current[key];
+        if (!el) return;
+        isScrollingByClick.current = true;
+        setActiveTab(key);
+        window.history.replaceState(null, '', `${window.location.pathname}#${key}`);
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.setTimeout(() => { isScrollingByClick.current = false; }, 700);
+    }, []);
 
     // Persist hash on first paint
     useEffect(() => {
@@ -207,9 +232,29 @@ export default function StudentProfilePage() {
     }, [roster, statusFilter, substatusFilter, search, classMap, sortBy]);
 
     const onTabChange = useCallback((key) => {
-        setActiveTab(key);
-        window.history.replaceState(null, '', `${window.location.pathname}#${key}`);
-    }, []);
+        scrollToSection(key);
+    }, [scrollToSection]);
+
+    // Scroll-spy: highlight the chip for whichever section is in view
+    useEffect(() => {
+        if (!student) return;
+        const root = mainScrollRef.current;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (isScrollingByClick.current) return;
+                const visible = entries
+                    .filter((e) => e.isIntersecting)
+                    .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+                if (visible.length > 0) {
+                    const key = visible[0].target.getAttribute('data-key');
+                    if (key) setActiveTab(key);
+                }
+            },
+            { root, rootMargin: '-120px 0px -55% 0px', threshold: [0.01, 0.15, 0.5] }
+        );
+        Object.values(sectionRefs.current).forEach((el) => el && observer.observe(el));
+        return () => observer.disconnect();
+    }, [student]);
 
     const selectStudent = useCallback((id) => {
         if (id === studentId) return;
@@ -253,10 +298,10 @@ export default function StudentProfilePage() {
         ? `${student.first_name || ''} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name || ''}`.trim()
         : '';
 
-    const renderActiveTab = () => {
+    const renderSection = (key) => {
         if (!student) return null;
         const props = { student, classMap, onReload: () => loadStudent(student.id), canEdit: isAdmin };
-        switch (activeTab) {
+        switch (key) {
             case 'dashboard':  return <DashboardTab {...props} onCardClick={onTabChange} />;
             case 'profile':    return <ProfileTab {...props} />;
             case 'contact':    return <ContactTab {...props} />;
@@ -267,154 +312,150 @@ export default function StudentProfilePage() {
             case 'behavior':   return <BehaviorTab {...props} />;
             case 'medical':    return <MedicalTab {...props} />;
             case 'report':     return <ReportFieldsTab {...props} />;
-            default:           return <DashboardTab {...props} onCardClick={onTabChange} />;
+            default:           return null;
         }
     };
 
+    const cls = student ? classMap.get(student.class_id) : null;
+    const statusRaw = student?.enrollment_status || 'enrolled';
+    const statusVariant = { enrolled: 'enrolled', inactive: 'warn', withdrawn: 'withdrawn', graduated: 'graduated' }[statusRaw.toLowerCase()] || 'info';
+    const keyFacts = [
+        { label: 'Grade', value: cls?.grade_level || '—' },
+        { label: 'Student ID', value: student?.student_id || '—' },
+        { label: 'Class', value: cls?.name || '—' },
+        { label: 'Year', value: student?.academic_year || cls?.academic_year || '—' },
+    ];
+
     return (
         <div className="lumina-profile-page" data-testid="lumina-student-profile">
-
-            {/* ===== TOP ACTION BAR ===== */}
-            <div className="lumina-profile-topbar" data-testid="profile-actionbar">
-                <span className="topbar-name" data-testid="profile-actionbar-name">
-                    {fullName || (studentLoading ? 'Loading…' : 'No student selected')}
-                </span>
-                <div className="topbar-actions">
-                    {isAdmin && (
-                        <TopBarAction
-                            icon={Trash2}
-                            label="Delete"
-                            onClick={handleDelete}
-                            disabled={!student}
-                            danger
-                            testid="profile-delete-btn"
-                        />
-                    )}
-                    <TopBarAction
-                        icon={Mail}
-                        label="Email Instructors"
-                        onClick={handleEmailInstructors}
-                        disabled={!student}
-                        testid="profile-email-btn"
-                    />
-                    <TopBarAction
-                        icon={BarChart3}
-                        label="Reports"
-                        onClick={handleReports}
-                        disabled={!student}
-                        testid="profile-reports-btn"
-                    />
-                </div>
-            </div>
-
-            {/* ===== 3-PANEL BODY ===== */}
             <div className="lumina-profile-body">
 
-                {/* LEFT: ROSTER */}
-                <aside className="lumina-profile-left" data-testid="roster-panel">
-                    <div className="roster-filters">
-                        <div className="lp-field">
-                            <label className="lp-field__label">Type</label>
-                            <select className="lp-select" value={typeFilter} disabled data-testid="filter-type">
-                                <option>Student</option>
-                                <option>Staff</option>
-                            </select>
-                        </div>
-                        <div className="lp-field">
-                            <label className="lp-field__label">Status</label>
-                            <select
-                                className="lp-select"
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                data-testid="filter-status"
-                            >
-                                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </div>
-                        <div className="lp-field">
-                            <label className="lp-field__label">Substatus</label>
-                            <select
-                                className="lp-select"
-                                value={substatusFilter}
-                                onChange={(e) => setSubstatusFilter(e.target.value)}
-                                data-testid="filter-grade"
-                            >
-                                {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
-                            </select>
-                        </div>
-                        <div className="lp-field">
-                            <label className="lp-field__label">Sort by</label>
-                            <select
-                                className="lp-select"
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value)}
-                                data-testid="filter-sort"
-                            >
-                                {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                            </select>
-                        </div>
-                        <div className="lp-field lp-field--full">
-                            <label className="lp-field__label">Search</label>
-                            <div className="lp-search">
-                                <input
-                                    className="lp-input"
-                                    placeholder="Search"
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    data-testid="filter-search"
-                                    style={{ paddingRight: 34 }}
-                                />
-                                <button type="button" className="lp-search__icon" aria-label="Search">
-                                    <Search size={14} />
-                                </button>
-                            </div>
-                        </div>
+                {/* LEFT: ROSTER (collapsible) */}
+                <aside
+                    className={`lumina-profile-left ${rosterCollapsed ? 'lumina-profile-left--collapsed' : ''}`}
+                    data-testid="roster-panel"
+                >
+                    <div className="roster-railhead">
+                        <button
+                            type="button"
+                            className="roster-toggle"
+                            onClick={() => setRosterCollapsed((v) => !v)}
+                            data-testid="roster-toggle"
+                            title={rosterCollapsed ? 'Expand roster' : 'Collapse roster'}
+                            aria-label={rosterCollapsed ? 'Expand roster' : 'Collapse roster'}
+                        >
+                            {rosterCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+                        </button>
+                        {!rosterCollapsed && <span className="roster-railhead__title">Students</span>}
                     </div>
 
-                    <div className="roster-list" data-testid="roster-list">
-                        {rosterLoading ? (
-                            <div className="lp-roster__empty">
-                                <Loader2 className="animate-spin inline-block mr-2" size={14} />
-                                Loading…
-                            </div>
-                        ) : filteredRoster.length === 0 ? (
-                            <div className="lp-roster__empty">No students match the current filters.</div>
-                        ) : (
-                            filteredRoster.map((s) => {
-                                let display;
-                                if (sortBy === 'first') {
-                                    display = `${s.first_name || ''}${s.middle_name ? ' ' + s.middle_name : ''} ${s.last_name || ''}`.trim();
-                                } else if (sortBy === 'id') {
-                                    const idStr = s.student_id || '—';
-                                    display = `${idStr} · ${s.last_name || ''}, ${s.first_name || ''}`;
-                                } else {
-                                    display = `${s.last_name || ''}, ${s.first_name || ''}${s.middle_name ? ' ' + s.middle_name : ''}`;
-                                }
-                                const isActive = s.id === studentId;
-                                return (
-                                    <div
-                                        key={s.id}
-                                        className={`lp-roster__row ${isActive ? 'lp-roster__row--active' : ''}`}
-                                        onClick={() => selectStudent(s.id)}
-                                        data-testid={`roster-row-${s.id}`}
+                    {!rosterCollapsed && (
+                        <>
+                            <div className="roster-filters">
+                                <div className="lp-field">
+                                    <label className="lp-field__label">Type</label>
+                                    <select className="lp-select" value={typeFilter} disabled data-testid="filter-type">
+                                        <option>Student</option>
+                                        <option>Staff</option>
+                                    </select>
+                                </div>
+                                <div className="lp-field">
+                                    <label className="lp-field__label">Status</label>
+                                    <select
+                                        className="lp-select"
+                                        value={statusFilter}
+                                        onChange={(e) => setStatusFilter(e.target.value)}
+                                        data-testid="filter-status"
                                     >
-                                        {display}
+                                        {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                <div className="lp-field">
+                                    <label className="lp-field__label">Substatus</label>
+                                    <select
+                                        className="lp-select"
+                                        value={substatusFilter}
+                                        onChange={(e) => setSubstatusFilter(e.target.value)}
+                                        data-testid="filter-grade"
+                                    >
+                                        {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
+                                    </select>
+                                </div>
+                                <div className="lp-field">
+                                    <label className="lp-field__label">Sort by</label>
+                                    <select
+                                        className="lp-select"
+                                        value={sortBy}
+                                        onChange={(e) => setSortBy(e.target.value)}
+                                        data-testid="filter-sort"
+                                    >
+                                        {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                                    </select>
+                                </div>
+                                <div className="lp-field lp-field--full">
+                                    <label className="lp-field__label">Search</label>
+                                    <div className="lp-search">
+                                        <input
+                                            className="lp-input"
+                                            placeholder="Search"
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                            data-testid="filter-search"
+                                            style={{ paddingRight: 34 }}
+                                        />
+                                        <button type="button" className="lp-search__icon" aria-label="Search">
+                                            <Search size={14} />
+                                        </button>
                                     </div>
-                                );
-                            })
-                        )}
-                    </div>
+                                </div>
+                            </div>
 
-                    <div className="roster-footer">
-                        <span data-testid="roster-count">Count: {filteredRoster.length}</span>
-                        <Link to="/students/manage" className="lp-link" data-testid="roster-add-link">
-                            Add
-                        </Link>
-                    </div>
+                            <div className="roster-list" data-testid="roster-list">
+                                {rosterLoading ? (
+                                    <div className="lp-roster__empty">
+                                        <Loader2 className="animate-spin inline-block mr-2" size={14} />
+                                        Loading…
+                                    </div>
+                                ) : filteredRoster.length === 0 ? (
+                                    <div className="lp-roster__empty">No students match the current filters.</div>
+                                ) : (
+                                    filteredRoster.map((s) => {
+                                        let display;
+                                        if (sortBy === 'first') {
+                                            display = `${s.first_name || ''}${s.middle_name ? ' ' + s.middle_name : ''} ${s.last_name || ''}`.trim();
+                                        } else if (sortBy === 'id') {
+                                            const idStr = s.student_id || '—';
+                                            display = `${idStr} · ${s.last_name || ''}, ${s.first_name || ''}`;
+                                        } else {
+                                            display = `${s.last_name || ''}, ${s.first_name || ''}${s.middle_name ? ' ' + s.middle_name : ''}`;
+                                        }
+                                        const isActive = s.id === studentId;
+                                        return (
+                                            <div
+                                                key={s.id}
+                                                className={`lp-roster__row ${isActive ? 'lp-roster__row--active' : ''}`}
+                                                onClick={() => selectStudent(s.id)}
+                                                data-testid={`roster-row-${s.id}`}
+                                            >
+                                                {display}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            <div className="roster-footer">
+                                <span data-testid="roster-count">Count: {filteredRoster.length}</span>
+                                <Link to="/students/manage" className="lp-link" data-testid="roster-add-link">
+                                    Add
+                                </Link>
+                            </div>
+                        </>
+                    )}
                 </aside>
 
-                {/* CENTER: PROFILE CONTENT */}
-                <main className="lumina-profile-center" data-testid="profile-center">
+                {/* MAIN: continuous scrollable profile */}
+                <main className="lumina-profile-main" ref={mainScrollRef} data-testid="profile-center">
                     {studentLoading ? (
                         <div className="lp-empty">
                             <Loader2 className="animate-spin" style={{ display: 'inline-block', marginRight: 8 }} />
@@ -426,26 +467,65 @@ export default function StudentProfilePage() {
                         </div>
                     ) : (
                         <>
-                            <h1 className="lp-center__title" data-testid="profile-student-name">{fullName}</h1>
-                            {renderActiveTab()}
+                            {/* STATUS RIBBON */}
+                            <header className="lp-ribbon" data-testid="profile-ribbon">
+                                <div className="lp-ribbon__top">
+                                    <h1 className="lp-ribbon__name" data-testid="profile-student-name">{fullName}</h1>
+                                    <div className="lp-ribbon__right">
+                                        <span className={`lp-badge lp-badge--${statusVariant}`} data-testid="profile-status-pill">
+                                            {statusRaw}
+                                        </span>
+                                        {isAdmin && (
+                                            <TopBarAction icon={Trash2} label="Delete" onClick={handleDelete} disabled={!student} danger testid="profile-delete-btn" />
+                                        )}
+                                        <TopBarAction icon={Mail} label="Email" onClick={handleEmailInstructors} disabled={!student} testid="profile-email-btn" />
+                                        <TopBarAction icon={BarChart3} label="Reports" onClick={handleReports} disabled={!student} testid="profile-reports-btn" />
+                                    </div>
+                                </div>
+                                <div className="lp-ribbon__facts">
+                                    {keyFacts.map((f) => (
+                                        <span key={f.label} className="lp-fact">
+                                            <span className="lp-fact__k">{f.label}</span>
+                                            <span className="lp-fact__v">{f.value}</span>
+                                        </span>
+                                    ))}
+                                </div>
+                            </header>
+
+                            {/* STICKY PILL ANCHOR CHIPS */}
+                            <nav className="lp-chipnav" data-testid="profile-tabs">
+                                {TABS.map((t) => (
+                                    <button
+                                        key={t.key}
+                                        type="button"
+                                        className={`lp-chip ${activeTab === t.key ? 'active' : ''}`}
+                                        onClick={() => scrollToSection(t.key)}
+                                        data-testid={`profile-tab-${t.key}`}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </nav>
+
+                            {/* CONTINUOUS SECTIONS */}
+                            <div className="lp-sections">
+                                {TABS.map((t) => (
+                                    <section
+                                        key={t.key}
+                                        id={`sec-${t.key}`}
+                                        data-key={t.key}
+                                        data-accent={accentFor(t.key)}
+                                        ref={(el) => { sectionRefs.current[t.key] = el; }}
+                                        className="lp-section"
+                                    >
+                                        <h2 className="lp-section__title">{t.label}</h2>
+                                        {renderSection(t.key)}
+                                    </section>
+                                ))}
+                            </div>
                         </>
                     )}
                 </main>
-
-                {/* RIGHT: SECTION NAV TABS */}
-                <nav className="lumina-profile-right" data-testid="profile-tabs">
-                    {TABS.map((t) => (
-                        <button
-                            key={t.key}
-                            type="button"
-                            className={`rnav-tab ${activeTab === t.key ? 'active' : ''}`}
-                            onClick={() => onTabChange(t.key)}
-                            data-testid={`profile-tab-${t.key}`}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
-                </nav>
 
             </div>
         </div>

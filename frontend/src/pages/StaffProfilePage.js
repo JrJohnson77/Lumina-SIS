@@ -19,6 +19,8 @@ import {
     Save,
     X,
     Camera,
+    PanelLeftClose,
+    PanelLeftOpen,
 } from 'lucide-react';
 import '../styles/student-profile.css';
 
@@ -31,6 +33,10 @@ const STAFF_TABS = [
     { key: 'contact',   label: 'Contact' },
     { key: 'login',     label: 'Login Management' },
 ];
+
+// Left-accent color per section: navy for account/security, blue for identity.
+const STAFF_NAVY_SECTIONS = new Set(['login']);
+const staffAccentFor = (key) => (STAFF_NAVY_SECTIONS.has(key) ? 'navy' : 'blue');
 
 const displayName = (u) => {
     const composed = [u.first_name, u.middle_name, u.last_name].filter(Boolean).join(' ').trim();
@@ -59,6 +65,22 @@ export default function StaffProfilePage() {
         const hash = window.location.hash.replace('#', '');
         return STAFF_TABS.find((t) => t.key === hash) ? hash : 'dashboard';
     });
+
+    // Collapsible roster rail + scroll-spy refs
+    const [rosterCollapsed, setRosterCollapsed] = useState(false);
+    const sectionRefs = useRef({});
+    const mainScrollRef = useRef(null);
+    const isScrollingByClick = useRef(false);
+
+    const scrollToSection = useCallback((key) => {
+        const el = sectionRefs.current[key];
+        if (!el) return;
+        isScrollingByClick.current = true;
+        setActiveTab(key);
+        window.history.replaceState(null, '', `${window.location.pathname}#${key}`);
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.setTimeout(() => { isScrollingByClick.current = false; }, 700);
+    }, []);
 
     useEffect(() => {
         if (!window.location.hash) {
@@ -128,9 +150,29 @@ export default function StaffProfilePage() {
     }, [roster, roleFilter, search]);
 
     const onTabChange = useCallback((key) => {
-        setActiveTab(key);
-        window.history.replaceState(null, '', `${window.location.pathname}#${key}`);
-    }, []);
+        scrollToSection(key);
+    }, [scrollToSection]);
+
+    // Scroll-spy: highlight the chip for whichever section is in view
+    useEffect(() => {
+        if (!staff) return;
+        const root = mainScrollRef.current;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (isScrollingByClick.current) return;
+                const visible = entries
+                    .filter((e) => e.isIntersecting)
+                    .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+                if (visible.length > 0) {
+                    const key = visible[0].target.getAttribute('data-key');
+                    if (key) setActiveTab(key);
+                }
+            },
+            { root, rootMargin: '-120px 0px -55% 0px', threshold: [0.01, 0.15, 0.5] }
+        );
+        Object.values(sectionRefs.current).forEach((el) => el && observer.observe(el));
+        return () => observer.disconnect();
+    }, [staff]);
 
     const selectStaff = useCallback((id) => {
         if (id === userId) return;
@@ -141,134 +183,124 @@ export default function StaffProfilePage() {
     const fullName = staff ? displayName(staff) : '';
     const initials = (staff ? displayName(staff) : '').split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase() || '?';
 
-    const renderActiveTab = () => {
+    const renderSection = (key) => {
         if (!staff) return null;
         const canEdit = isAdmin && (me?.role === 'superuser' || staff.role !== 'superuser');
         const reload = () => loadStaff(staff.id);
-        if (activeTab === 'dashboard') return <StaffDashboardTab staff={staff} initials={initials} onCardClick={onTabChange} canEdit={canEdit} onReload={reload} />;
-        if (activeTab === 'profile')   return <StaffProfileTab staff={staff} canEdit={canEdit} onReload={reload} />;
-        if (activeTab === 'contact')   return <StaffContactTab staff={staff} canEdit={canEdit} onReload={reload} />;
-        if (activeTab === 'login')     return <StaffLoginTab staff={staff} me={me} onReload={reload} />;
+        if (key === 'dashboard') return <StaffDashboardTab staff={staff} initials={initials} onCardClick={onTabChange} canEdit={canEdit} onReload={reload} />;
+        if (key === 'profile')   return <StaffProfileTab staff={staff} canEdit={canEdit} onReload={reload} />;
+        if (key === 'contact')   return <StaffContactTab staff={staff} canEdit={canEdit} onReload={reload} />;
+        if (key === 'login')     return <StaffLoginTab staff={staff} me={me} onReload={reload} />;
         return null;
     };
 
+    const staffFacts = staff ? [
+        { label: 'Username', value: staff.username || '—' },
+        { label: 'Email', value: staff.email || '—' },
+        { label: 'Phone', value: staff.phone || '—' },
+    ] : [];
+
     return (
         <div className="lumina-profile-page" data-testid="lumina-staff-profile">
-            <div className="lumina-profile-topbar" data-testid="staff-actionbar">
-                <div className="flex items-center gap-3 min-w-0">
-                    <span className="topbar-name" data-testid="staff-actionbar-name">
-                        {fullName || (staffLoading ? 'Loading…' : 'No staff member selected')}
-                    </span>
-                    {staff && (
+            <div className="lumina-profile-body">
+                {/* LEFT: ROSTER (collapsible) */}
+                <aside
+                    className={`lumina-profile-left ${rosterCollapsed ? 'lumina-profile-left--collapsed' : ''}`}
+                    data-testid="staff-roster-panel"
+                >
+                    <div className="roster-railhead">
+                        <button
+                            type="button"
+                            className="roster-toggle"
+                            onClick={() => setRosterCollapsed((v) => !v)}
+                            data-testid="staff-roster-toggle"
+                            title={rosterCollapsed ? 'Expand roster' : 'Collapse roster'}
+                            aria-label={rosterCollapsed ? 'Expand roster' : 'Collapse roster'}
+                        >
+                            {rosterCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+                        </button>
+                        {!rosterCollapsed && <span className="roster-railhead__title">Staff</span>}
+                    </div>
+
+                    {!rosterCollapsed && (
                         <>
-                            <span
-                                className="lp-badge lp-badge--info"
-                                style={{ fontSize: 11, textTransform: 'capitalize' }}
-                                data-testid="staff-topbar-role"
-                            >
-                                {staff.role}
-                            </span>
-                            {staff.email && (
-                                <span className="hidden md:inline-flex items-center gap-1 text-xs text-muted-foreground" data-testid="staff-topbar-email">
-                                    <Mail size={12} /> {staff.email}
-                                </span>
-                            )}
-                            {staff.phone && (
-                                <span className="hidden lg:inline-flex items-center gap-1 text-xs text-muted-foreground" data-testid="staff-topbar-phone">
-                                    <Phone size={12} /> {staff.phone}
-                                </span>
-                            )}
+                            <div className="roster-filters">
+                                <div className="lp-field">
+                                    <label className="lp-field__label">Type</label>
+                                    <select className="lp-select" value="Staff" disabled data-testid="staff-filter-type">
+                                        <option>Student</option>
+                                        <option>Staff</option>
+                                    </select>
+                                </div>
+                                <div className="lp-field">
+                                    <label className="lp-field__label">Role</label>
+                                    <select
+                                        className="lp-select"
+                                        value={roleFilter}
+                                        onChange={(e) => setRoleFilter(e.target.value)}
+                                        data-testid="staff-filter-role"
+                                    >
+                                        {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                                    </select>
+                                </div>
+                                <div className="lp-field lp-field--full">
+                                    <label className="lp-field__label">Search</label>
+                                    <div className="lp-search">
+                                        <input
+                                            className="lp-input"
+                                            placeholder="Search"
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                            data-testid="staff-filter-search"
+                                            style={{ paddingRight: 38 }}
+                                        />
+                                        <button type="button" className="lp-search__icon" aria-label="Search">
+                                            <Search size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="roster-list" data-testid="staff-roster-list">
+                                {rosterLoading ? (
+                                    <div className="lp-roster__empty">
+                                        <Loader2 className="animate-spin inline-block mr-2" size={14} />
+                                        Loading…
+                                    </div>
+                                ) : filteredRoster.length === 0 ? (
+                                    <div className="lp-roster__empty">No staff match the current filters.</div>
+                                ) : (
+                                    filteredRoster.map((u) => {
+                                        const isActive = u.id === userId;
+                                        return (
+                                            <div
+                                                key={u.id}
+                                                className={`lp-roster__row ${isActive ? 'lp-roster__row--active' : ''}`}
+                                                onClick={() => selectStaff(u.id)}
+                                                data-testid={`staff-roster-row-${u.id}`}
+                                            >
+                                                <div>{lastFirst(u)}</div>
+                                                <div style={{ fontSize: 10.5, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 2, fontWeight: 600 }}>
+                                                    {u.role}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            <div className="roster-footer">
+                                <span data-testid="staff-roster-count">Count: {filteredRoster.length}</span>
+                                <Link to="/users" className="lp-link" data-testid="staff-roster-add-link">
+                                    Manage
+                                </Link>
+                            </div>
                         </>
                     )}
-                </div>
-                <div className="topbar-actions">
-                    <span
-                        className="hidden md:inline-flex items-center text-xs text-muted-foreground px-2"
-                        data-testid="staff-topbar-count"
-                    >
-                        {filteredRoster.length} {filteredRoster.length === 1 ? 'staff member' : 'staff members'}
-                    </span>
-                </div>
-            </div>
-
-            <div className="lumina-profile-body">
-                {/* LEFT: ROSTER */}
-                <aside className="lumina-profile-left" data-testid="staff-roster-panel">
-                    <div className="roster-filters">
-                        <div className="lp-field">
-                            <label className="lp-field__label">Type</label>
-                            <select className="lp-select" value="Staff" disabled data-testid="staff-filter-type">
-                                <option>Student</option>
-                                <option>Staff</option>
-                            </select>
-                        </div>
-                        <div className="lp-field">
-                            <label className="lp-field__label">Role</label>
-                            <select
-                                className="lp-select"
-                                value={roleFilter}
-                                onChange={(e) => setRoleFilter(e.target.value)}
-                                data-testid="staff-filter-role"
-                            >
-                                {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                            </select>
-                        </div>
-                        <div className="lp-field lp-field--full">
-                            <label className="lp-field__label">Search</label>
-                            <div className="lp-search">
-                                <input
-                                    className="lp-input"
-                                    placeholder="Search"
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    data-testid="staff-filter-search"
-                                    style={{ paddingRight: 38 }}
-                                />
-                                <button type="button" className="lp-search__icon" aria-label="Search">
-                                    <Search size={14} />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="roster-list" data-testid="staff-roster-list">
-                        {rosterLoading ? (
-                            <div className="lp-roster__empty">
-                                <Loader2 className="animate-spin inline-block mr-2" size={14} />
-                                Loading…
-                            </div>
-                        ) : filteredRoster.length === 0 ? (
-                            <div className="lp-roster__empty">No staff match the current filters.</div>
-                        ) : (
-                            filteredRoster.map((u) => {
-                                const isActive = u.id === userId;
-                                return (
-                                    <div
-                                        key={u.id}
-                                        className={`lp-roster__row ${isActive ? 'lp-roster__row--active' : ''}`}
-                                        onClick={() => selectStaff(u.id)}
-                                        data-testid={`staff-roster-row-${u.id}`}
-                                    >
-                                        <div>{lastFirst(u)}</div>
-                                        <div style={{ fontSize: 10.5, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 2, fontWeight: 600 }}>
-                                            {u.role}
-                                        </div>
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
-
-                    <div className="roster-footer">
-                        <span data-testid="staff-roster-count">Count: {filteredRoster.length}</span>
-                        <Link to="/users" className="lp-link" data-testid="staff-roster-add-link">
-                            Manage
-                        </Link>
-                    </div>
                 </aside>
 
-                {/* CENTER */}
-                <main className="lumina-profile-center" data-testid="staff-center">
+                {/* MAIN: continuous scrollable profile */}
+                <main className="lumina-profile-main" ref={mainScrollRef} data-testid="staff-center">
                     {staffLoading ? (
                         <div className="lp-empty">
                             <Loader2 className="animate-spin" style={{ display: 'inline-block', marginRight: 8 }} />
@@ -280,31 +312,60 @@ export default function StaffProfilePage() {
                         </div>
                     ) : (
                         <>
-                            <h1 className="lp-center__title" data-testid="staff-name">
-                                {fullName}
-                                <span className="lp-badge lp-badge--info" style={{ marginLeft: 12, verticalAlign: 'middle', fontSize: 11 }}>
-                                    {staff.role}
-                                </span>
-                            </h1>
-                            {renderActiveTab()}
+                            {/* STATUS RIBBON */}
+                            <header className="lp-ribbon" data-testid="staff-ribbon">
+                                <div className="lp-ribbon__top">
+                                    <h1 className="lp-ribbon__name" data-testid="staff-name">{fullName}</h1>
+                                    <div className="lp-ribbon__right">
+                                        <span className="lp-badge lp-badge--info" style={{ textTransform: 'capitalize' }} data-testid="staff-status-pill">
+                                            {staff.role}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="lp-ribbon__facts">
+                                    {staffFacts.map((f) => (
+                                        <span key={f.label} className="lp-fact">
+                                            <span className="lp-fact__k">{f.label}</span>
+                                            <span className="lp-fact__v">{f.value}</span>
+                                        </span>
+                                    ))}
+                                </div>
+                            </header>
+
+                            {/* STICKY PILL ANCHOR CHIPS */}
+                            <nav className="lp-chipnav" data-testid="staff-tabs">
+                                {STAFF_TABS.map((t) => (
+                                    <button
+                                        key={t.key}
+                                        type="button"
+                                        className={`lp-chip ${activeTab === t.key ? 'active' : ''}`}
+                                        onClick={() => scrollToSection(t.key)}
+                                        data-testid={`staff-tab-${t.key}`}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </nav>
+
+                            {/* CONTINUOUS SECTIONS */}
+                            <div className="lp-sections">
+                                {STAFF_TABS.map((t) => (
+                                    <section
+                                        key={t.key}
+                                        id={`sec-${t.key}`}
+                                        data-key={t.key}
+                                        data-accent={staffAccentFor(t.key)}
+                                        ref={(el) => { sectionRefs.current[t.key] = el; }}
+                                        className="lp-section"
+                                    >
+                                        <h2 className="lp-section__title">{t.label}</h2>
+                                        {renderSection(t.key)}
+                                    </section>
+                                ))}
+                            </div>
                         </>
                     )}
                 </main>
-
-                {/* RIGHT */}
-                <nav className="lumina-profile-right" data-testid="staff-tabs">
-                    {STAFF_TABS.map((t) => (
-                        <button
-                            key={t.key}
-                            type="button"
-                            className={`rnav-tab ${activeTab === t.key ? 'active' : ''}`}
-                            onClick={() => onTabChange(t.key)}
-                            data-testid={`staff-tab-${t.key}`}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
-                </nav>
             </div>
         </div>
     );
