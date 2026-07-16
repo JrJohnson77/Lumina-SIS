@@ -505,12 +505,12 @@ export const Layout = ({ children }) => {
                 </header>
 
                 {/* Page content */}
-                <main className="flex-1">
+                <main className="flex-1 pb-10">
                     {children}
                 </main>
 
-                {/* App-wide footer — pinned to the bottom on every page */}
-                <AppFooter className="mt-6 -mx-5 md:-mx-8 -mb-5 md:-mb-8 px-5 md:px-8" />
+                {/* App-wide footer — fixed to the bottom of the viewport on every page */}
+                <AppFooter collapsed={collapsed} />
             </div>
         </div>
     );

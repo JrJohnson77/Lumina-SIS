@@ -10,13 +10,13 @@ import { Link } from 'react-router-dom';
  *  - variant="app"  (default) : used inside the authenticated Layout (main content area)
  *  - variant="auth" : used on full-screen auth pages (login / forgot-password)
  */
-export const AppFooter = ({ variant = 'app', className = '' }) => {
+export const AppFooter = ({ variant = 'app', collapsed = false, className = '' }) => {
     const year = new Date().getFullYear();
 
     const base =
         variant === 'auth'
             ? 'w-full px-6 py-2.5 text-[11px] text-muted-foreground flex flex-row items-center justify-between gap-2 border-t border-border/60 bg-background/70 backdrop-blur'
-            : 'pt-2.5 pb-2 px-3 text-[11px] text-muted-foreground flex flex-row items-center justify-between gap-2 border-t border-border/60 bg-background/80';
+            : `fixed bottom-0 right-0 left-0 z-30 px-4 py-2 text-[11px] text-muted-foreground flex flex-row items-center justify-between gap-2 border-t border-border bg-background ${collapsed ? 'md:left-[76px]' : 'md:left-64'}`;
 
     return (
         <footer className={`${base} ${className}`} data-testid="app-footer">
