@@ -505,12 +505,12 @@ export const Layout = ({ children }) => {
                 </header>
 
                 {/* Page content */}
-                <main>
+                <main className="flex-1">
                     {children}
                 </main>
 
-                {/* App-wide footer */}
-                <AppFooter />
+                {/* App-wide footer — pinned to the bottom on every page */}
+                <AppFooter className="mt-6 -mx-5 md:-mx-8 -mb-5 md:-mb-8 px-5 md:px-8" />
             </div>
         </div>
     );

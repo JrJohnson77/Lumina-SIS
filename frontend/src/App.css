@@ -16,7 +16,7 @@
 
 /* Main content area */
 .main-content {
-    @apply ml-0 md:ml-64 min-h-screen p-5 md:p-8 transition-all duration-300;
+    @apply ml-0 md:ml-64 min-h-screen p-5 md:p-8 transition-all duration-300 flex flex-col;
 }
 
 .main-content--collapsed {
