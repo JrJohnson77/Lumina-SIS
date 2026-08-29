@@ -47,7 +47,12 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # JWT Settings
-JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
+JWT_SECRET = os.environ.get('JWT_SECRET')
+if not JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET is not set. Refusing to start. "
+        "Generate one with: openssl rand -hex 32 (never commit the real value)."
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -742,7 +747,9 @@ async def login(credentials: UserLogin):
     # Check if school exists and is active
     school = await db.schools.find_one({"school_code": school_code, "is_active": True})
     if not school:
-        raise HTTPException(status_code=401, detail="Invalid school code")
+        # Use the same message/status as bad credentials so callers can't
+        # enumerate valid school codes.
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     
     # First, try to find the user in the requested school
     user = await db.users.find_one({
@@ -2844,7 +2851,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 @api_router.post("/upload/photo")
 async def upload_photo(
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_roles([UserRole.ADMIN, UserRole.TEACHER]))
 ):
     """Upload a photo for student or user profile"""
     # Validate file extension
@@ -4850,10 +4857,20 @@ async def root_health_check():
     return {"status": "healthy"}
 
 # CORS
+_cors_env = os.environ.get('CORS_ORIGINS')
+if _cors_env is None or _cors_env.strip() == '':
+    _cors_origins = []
+    logging.warning(
+        "CORS_ORIGINS is not set — ALL cross-origin browser requests will be "
+        "blocked until CORS_ORIGINS is configured (comma-separated origins)."
+    )
+else:
+    _cors_origins = [o.strip() for o in _cors_env.split(',') if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
