@@ -58,7 +58,14 @@ JWT_EXPIRATION_HOURS = 24
 
 # Resend (transactional email)
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
-SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', '')
+# 2.4: If email is configured, the sender must be an explicit, verified domain —
+# never silently fall back to Resend's sandbox address (spam-filtered/unprofessional).
+if RESEND_API_KEY and not SENDER_EMAIL:
+    raise RuntimeError(
+        "RESEND_API_KEY is set but SENDER_EMAIL is not. Set SENDER_EMAIL to a "
+        "verified sender address (see backend/.env.example)."
+    )
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
 
@@ -632,28 +639,28 @@ def create_access_token(data: dict) -> str:
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
+async def _user_from_token(token: str) -> dict:
+    """Decode a JWT and return the user doc (with token school_code override)."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
-        
-        # Override school_code from token if present (for superuser context switching)
         token_school_code = payload.get("school_code")
         if token_school_code:
             user = {**user, "school_code": token_school_code}
-        
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    return await _user_from_token(credentials.credentials)
 
 def require_roles(allowed_roles: List[str]):
     async def role_checker(current_user: dict = Depends(get_current_user)):
@@ -2968,9 +2975,26 @@ async def upload_template_background(
     return {"background_url": f"/api/uploads/{filename}", "filename": filename}
 
 @api_router.get("/uploads/{filename}")
-async def get_upload(filename: str, current_user: dict = Depends(get_current_user)):
+async def get_upload(
+    filename: str,
+    request: Request,
+    token: Optional[str] = None,
+):
     """Serve uploaded files. Requires auth; tenant-scoped (1.5).
-    Superusers may read any file; other users only files owned by their school."""
+    Auth accepted via Authorization header OR a `token` query param, because
+    browser <img> tags cannot send an Authorization header. Superusers may read
+    any file; other users only files owned by their school."""
+    # Resolve the caller from header or query-param token
+    auth_header = request.headers.get("authorization") or ""
+    jwt_token = None
+    if auth_header.lower().startswith("bearer "):
+        jwt_token = auth_header.split(" ", 1)[1].strip()
+    elif token:
+        jwt_token = token
+    if not jwt_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    current_user = await _user_from_token(jwt_token)
+
     file_path = UPLOAD_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -3939,6 +3963,7 @@ async def add_vaccination(
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "vaccinations", payload.model_dump()
     )
+    await write_audit(current_user, "create", "health_record", student_id, "vaccination")
     return HealthRecordResponse(**updated)
 
 
@@ -3953,6 +3978,7 @@ async def add_allergy(
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "allergies", payload.model_dump()
     )
+    await write_audit(current_user, "create", "health_record", student_id, "allergy")
     return HealthRecordResponse(**updated)
 
 
@@ -3967,6 +3993,7 @@ async def add_condition(
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "conditions", payload.model_dump()
     )
+    await write_audit(current_user, "create", "health_record", student_id, "condition")
     return HealthRecordResponse(**updated)
 
 
@@ -3981,6 +4008,7 @@ async def add_medication(
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "medications", payload.model_dump()
     )
+    await write_audit(current_user, "create", "health_record", student_id, "medication")
     return HealthRecordResponse(**updated)
 
 
@@ -3995,6 +4023,7 @@ async def add_visit(
     updated = await _append_health_entry(
         student_id, current_user["school_code"], "visits", payload.model_dump()
     )
+    await write_audit(current_user, "create", "health_record", student_id, "visit")
     return HealthRecordResponse(**updated)
 
 
@@ -4017,6 +4046,7 @@ async def delete_health_entry(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Entry not found")
+    await write_audit(current_user, "delete", "health_record", student_id, entry_type)
     return {"message": "Entry deleted"}
 
 
@@ -4125,6 +4155,7 @@ async def create_discipline(
     if not doc.get("reported_by_name"):
         doc["reported_by_name"] = current_user.get("name", "")
     await db.discipline_incidents.insert_one(dict(doc))
+    await write_audit(current_user, "create", "discipline_incident", doc["id"], doc.get("type", ""))
     return DisciplineResponse(**doc)
 
 
@@ -4146,6 +4177,7 @@ async def update_discipline(
         query, {"$set": {**payload.model_dump(), "updated_at": now}}
     )
     updated = await db.discipline_incidents.find_one(query, {"_id": 0})
+    await write_audit(current_user, "update", "discipline_incident", incident_id, updated.get("type", ""))
     return DisciplineResponse(**updated)
 
 
@@ -4158,6 +4190,7 @@ async def delete_discipline(
     result = await db.discipline_incidents.delete_one(query)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Incident not found")
+    await write_audit(current_user, "delete", "discipline_incident", incident_id, "")
     return {"message": "Incident deleted"}
 
 
@@ -4998,6 +5031,31 @@ async def startup_migrations():
             )
     except Exception as e:
         logger.warning(f"[migration] uploads backfill failed: {e}")
+
+    # 0b) 2.2 Indexes (idempotent — safe to call every startup).
+    try:
+        school_id_collections = [
+            "students", "users", "classes", "attendance", "gradebook",
+            "discipline_incidents", "health_records", "admissions",
+            "comment_bank", "report_templates",
+        ]
+        for coll in school_id_collections:
+            await db[coll].create_index([("school_code", 1), ("id", 1)])
+        for coll in ["attendance", "gradebook", "health_records",
+                     "discipline_incidents", "social_skills",
+                     "teacher_comments", "report_cards"]:
+            await db[coll].create_index([("student_id", 1)])
+        for coll in ["attendance", "gradebook"]:
+            await db[coll].create_index([("class_id", 1)])
+        for coll in ["gradebook", "report_cards", "attendance"]:
+            await db[coll].create_index([("school_code", 1), ("academic_year", 1), ("term", 1)])
+        # Support the new uploads ownership lookups.
+        await db.uploads.create_index([("filename", 1)])
+        # Visibility: log index counts so broken creation is not silent.
+        counts = {c: len(await db[c].index_information()) for c in school_id_collections}
+        logger.info(f"[migration] 2.2 indexes ensured; index counts: {counts}")
+    except Exception as e:
+        logger.warning(f"[migration] index creation failed: {e}")
 
     # 1) Seed the shared SYSTEM Ashcombe default template if missing.
     try:

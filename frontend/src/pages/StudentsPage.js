@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { mediaUrl } from '../lib/media';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -279,7 +280,7 @@ export default function StudentsPage() {
                                     <div className="relative w-20 h-20 rounded-xl border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted/30 cursor-pointer hover:border-primary/50 transition-colors"
                                         onClick={() => fileInputRef.current?.click()}>
                                         {formData.photo_url ? (
-                                            <img src={formData.photo_url.startsWith('http') ? formData.photo_url : `${process.env.REACT_APP_BACKEND_URL}${formData.photo_url}`} alt="Student" className="w-full h-full object-cover" />
+                                            <img src={mediaUrl(formData.photo_url)} alt="Student" className="w-full h-full object-cover" />
                                         ) : uploading ? (
                                             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                                         ) : (
@@ -586,7 +587,7 @@ export default function StudentsPage() {
                             <div className="flex items-start gap-3">
                                 <div className="w-12 h-12 rounded-xl bg-primary/8 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0 overflow-hidden">
                                     {student.photo_url ? (
-                                        <img src={student.photo_url.startsWith('http') ? student.photo_url : `${process.env.REACT_APP_BACKEND_URL}${student.photo_url}`} alt="" className="w-full h-full object-cover" />
+                                        <img src={mediaUrl(student.photo_url)} alt="" className="w-full h-full object-cover" />
                                     ) : (
                                         `${student.first_name?.[0] || ''}${student.last_name?.[0] || ''}`
                                     )}

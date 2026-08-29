@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { mediaUrl } from '../lib/media';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -316,7 +317,7 @@ export default function UsersPage() {
                                             {formData.photo_url ? (
                                                 <>
                                                     <img 
-                                                        src={formData.photo_url.startsWith('/api') ? `${process.env.REACT_APP_BACKEND_URL}${formData.photo_url}` : formData.photo_url}
+                                                        src={mediaUrl(formData.photo_url)}
                                                         alt="User" 
                                                         className="w-full h-full object-cover"
                                                         onError={(e) => { e.target.style.display = 'none'; }}
