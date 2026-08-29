@@ -950,7 +950,7 @@ async def create_school(school: SchoolCreate, current_user: dict = Depends(requi
     # Auto-create default report template for the new school
     template = build_default_template(school.school_code.upper(), school.name)
     await db.report_templates.insert_one(template)
-    
+    await write_audit(current_user, "create", "school", school_id, doc["school_code"])
     return SchoolResponse(**doc)
 
 @api_router.get("/schools", response_model=List[SchoolResponse])
@@ -982,6 +982,7 @@ async def update_school(school_id: str, school: SchoolCreate, current_user: dict
     
     await db.schools.update_one({"id": school_id}, {"$set": update_data})
     updated = await db.schools.find_one({"id": school_id}, {"_id": 0})
+    await write_audit(current_user, "update", "school", school_id, existing["school_code"])
     return SchoolResponse(**updated)
 
 @api_router.delete("/schools/{school_id}")
@@ -995,6 +996,7 @@ async def delete_school(school_id: str, current_user: dict = Depends(require_sup
         raise HTTPException(status_code=400, detail="Cannot delete system school")
     
     await db.schools.delete_one({"id": school_id})
+    await write_audit(current_user, "delete", "school", school_id, school["school_code"])
     return {"message": "School deleted successfully"}
 
 
@@ -1028,6 +1030,7 @@ async def add_academic_year(
         {"$set": {"academic_years": academic_years}}
     )
     
+    await write_audit(current_user, "create", "school", school_id, f"{school.get('school_code','')} · add AY {year}")
     return {"message": "Academic year added", "academic_year": new_year}
 
 @api_router.put("/schools/{school_id}/academic-years/{year}/toggle")
@@ -1302,6 +1305,7 @@ async def update_school_subjects(
         {"$set": {"subjects": [{"name": s["name"], "is_core": s["is_core"]} for s in subjects_data]}}
     )
     
+    await write_audit(current_user, "update", "school", school_id, f"{school['school_code']} · subjects")
     return {"message": "Subjects updated successfully", "subjects": subjects_data}
 
 @api_router.post("/schools/{school_id}/subjects")
@@ -1328,6 +1332,7 @@ async def add_school_subject(
         {"$set": {"subjects": subjects}}
     )
     
+    await write_audit(current_user, "create", "school", school_id, f"{school['school_code']} · +subject {subject_data.get('name','')}")
     return {"message": "Subject added", "subject": subject_data}
 
 @api_router.delete("/schools/{school_id}/subjects/{subject_name}")
@@ -1347,6 +1352,7 @@ async def delete_school_subject(
         {"$set": {"subjects": subjects}}
     )
     
+    await write_audit(current_user, "delete", "school", school_id, f"{school['school_code']} · -subject {subject_name}")
     return {"message": f"Subject '{subject_name}' deleted"}
 
 
