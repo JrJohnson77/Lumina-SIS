@@ -473,18 +473,38 @@ const AshcombeReportCard = forwardRef(({ data, template }, ref) => {
                 )}
 
                 {/* Signature lines (rendered as part of body flow so they sit above the footer graphic) */}
-                {(template?.footer?.show_signature_lines || []).length > 0 && (
-                    <div style={{ marginTop: 26, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
-                        {(template.footer.show_signature_lines || []).map((slot) => (
-                            <div key={slot}>
-                                <div style={{ borderBottom: "1px solid #0f172a", height: 30 }} />
-                                <div style={{ fontSize: 9, letterSpacing: 1, color: "#334155", marginTop: 4, textTransform: "uppercase", fontWeight: 700 }}>
-                                    {slot === "principal" ? "Principal" : slot === "parent_guardian" ? "Parent / Guardian" : slot.replace(/_/g, " ")}
+                {(() => {
+                    const configured = template?.footer?.show_signature_lines || ["principal"];
+                    // The class's assigned teacher is the form teacher — always show that line.
+                    const slots = Array.from(new Set(["class_teacher", ...configured]));
+                    const formTeacher = data?.form_teacher_name || cls?.teacher_name || data?.advisor || "";
+                    const nameFor = (slot) => {
+                        if (slot === "class_teacher" || slot === "form_teacher" || slot === "teacher") return formTeacher;
+                        if (slot === "principal") return school?.principal_name || "";
+                        return "";
+                    };
+                    const labelFor = (slot) => {
+                        if (slot === "class_teacher" || slot === "form_teacher" || slot === "teacher") return "Form Teacher";
+                        if (slot === "principal") return "Principal";
+                        if (slot === "parent_guardian") return "Parent / Guardian";
+                        return slot.replace(/_/g, " ");
+                    };
+                    return (
+                        <div style={{ marginTop: 26, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
+                            {slots.map((slot) => (
+                                <div key={slot}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0f172a", minHeight: 16, marginBottom: 2 }}>
+                                        {nameFor(slot)}
+                                    </div>
+                                    <div style={{ borderBottom: "1px solid #0f172a", height: 20 }} />
+                                    <div style={{ fontSize: 9, letterSpacing: 1, color: "#334155", marginTop: 4, textTransform: "uppercase", fontWeight: 700 }}>
+                                        {labelFor(slot)}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                            ))}
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Footer */}

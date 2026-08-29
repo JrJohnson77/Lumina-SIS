@@ -139,21 +139,13 @@ export default function StudentProfilePage() {
 
     // Collapsible roster rail
     const [rosterCollapsed, setRosterCollapsed] = useState(false);
-
-    // Refs to each stacked section + the scroll container (for chip scroll-spy)
-    const sectionRefs = useRef({});
     const mainScrollRef = useRef(null);
-    const isScrollingByClick = useRef(false);
 
-    // Scroll a section into view when a chip is clicked
+    // Switch to a section (shown as its own window)
     const scrollToSection = useCallback((key) => {
-        const el = sectionRefs.current[key];
-        if (!el) return;
-        isScrollingByClick.current = true;
         setActiveTab(key);
         window.history.replaceState(null, '', `${window.location.pathname}#${key}`);
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        window.setTimeout(() => { isScrollingByClick.current = false; }, 700);
+        if (mainScrollRef.current) mainScrollRef.current.scrollTo({ top: 0, behavior: 'auto' });
     }, []);
 
     // Persist hash on first paint
@@ -234,27 +226,6 @@ export default function StudentProfilePage() {
     const onTabChange = useCallback((key) => {
         scrollToSection(key);
     }, [scrollToSection]);
-
-    // Scroll-spy: highlight the chip for whichever section is in view
-    useEffect(() => {
-        if (!student) return;
-        const root = mainScrollRef.current;
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (isScrollingByClick.current) return;
-                const visible = entries
-                    .filter((e) => e.isIntersecting)
-                    .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-                if (visible.length > 0) {
-                    const key = visible[0].target.getAttribute('data-key');
-                    if (key) setActiveTab(key);
-                }
-            },
-            { root, rootMargin: '-120px 0px -55% 0px', threshold: [0.01, 0.15, 0.5] }
-        );
-        Object.values(sectionRefs.current).forEach((el) => el && observer.observe(el));
-        return () => observer.disconnect();
-    }, [student]);
 
     const selectStudent = useCallback((id) => {
         if (id === studentId) return;
@@ -445,7 +416,7 @@ export default function StudentProfilePage() {
                             </div>
 
                             <div className="roster-footer">
-                                <span data-testid="roster-count">Count: {filteredRoster.length}</span>
+                                <span data-testid="roster-count">Total: {filteredRoster.length}</span>
                                 <Link to="/students/manage" className="lp-link" data-testid="roster-add-link">
                                     Add
                                 </Link>
@@ -507,21 +478,22 @@ export default function StudentProfilePage() {
                                 ))}
                             </nav>
 
-                            {/* CONTINUOUS SECTIONS */}
+                            {/* ACTIVE SECTION (own window) */}
                             <div className="lp-sections">
-                                {TABS.map((t) => (
-                                    <section
-                                        key={t.key}
-                                        id={`sec-${t.key}`}
-                                        data-key={t.key}
-                                        data-accent={accentFor(t.key)}
-                                        ref={(el) => { sectionRefs.current[t.key] = el; }}
-                                        className="lp-section"
-                                    >
-                                        <h2 className="lp-section__title">{t.label}</h2>
-                                        {renderSection(t.key)}
-                                    </section>
-                                ))}
+                                {(() => {
+                                    const t = TABS.find((x) => x.key === activeTab) || TABS[0];
+                                    return (
+                                        <section
+                                            id={`sec-${t.key}`}
+                                            data-key={t.key}
+                                            data-accent={accentFor(t.key)}
+                                            className="lp-section"
+                                        >
+                                            <h2 className="lp-section__title">{t.label}</h2>
+                                            {renderSection(t.key)}
+                                        </section>
+                                    );
+                                })()}
                             </div>
                         </>
                     )}

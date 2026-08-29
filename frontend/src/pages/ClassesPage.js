@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -39,9 +40,11 @@ const initialFormData = {
 };
 
 export default function ClassesPage() {
+    const navigate = useNavigate();
     const [classes, setClasses] = useState([]);
     const [teachers, setTeachers] = useState([]);
     const [students, setStudents] = useState([]);
+    const [viewClass, setViewClass] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -320,42 +323,54 @@ export default function ClassesPage() {
                             data-testid={`class-card-${cls.id}`}
                         >
                             <CardContent className="p-6">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="w-14 h-14 rounded-2xl bg-secondary/20 flex items-center justify-center">
-                                        <School className="w-7 h-7 text-secondary-foreground" />
-                                    </div>
-                                    <span className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary font-medium">
-                                        Grade {cls.grade_level}
-                                    </span>
-                                </div>
-                                
-                                <h3 className="font-bold text-xl mb-1">{cls.name}</h3>
-                                <p className="text-sm text-muted-foreground mb-4">
-                                    Academic Year {cls.academic_year}
-                                </p>
-                                
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                        <User className="w-4 h-4" />
-                                        <span>{getTeacherName(cls.teacher_id)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                        <Users className="w-4 h-4" />
-                                        <span>{getStudentCount(cls.id)} students</span>
-                                    </div>
-                                    {cls.room_number && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                            <MapPin className="w-4 h-4" />
-                                            <span>{cls.room_number}</span>
+                                <div
+                                    className="cursor-pointer group"
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => setViewClass(cls)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') setViewClass(cls); }}
+                                    data-testid={`view-class-${cls.id}`}
+                                >
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="w-14 h-14 rounded-2xl bg-secondary/20 flex items-center justify-center">
+                                            <School className="w-7 h-7 text-secondary-foreground" />
                                         </div>
-                                    )}
+                                        <span className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary font-medium">
+                                            Grade {cls.grade_level}
+                                        </span>
+                                    </div>
+
+                                    <h3 className="font-bold text-xl mb-1 group-hover:text-primary transition-colors">{cls.name}</h3>
+                                    <p className="text-sm text-muted-foreground mb-4">
+                                        Academic Year {cls.academic_year}
+                                    </p>
+
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                            <User className="w-4 h-4" />
+                                            <span>{getTeacherName(cls.teacher_id)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                            <Users className="w-4 h-4" />
+                                            <span>{getStudentCount(cls.id)} students</span>
+                                        </div>
+                                        {cls.room_number && (
+                                            <div className="flex items-center gap-2 text-muted-foreground">
+                                                <MapPin className="w-4 h-4" />
+                                                <span>{cls.room_number}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="mt-3 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                        View enrolled students &rarr;
+                                    </p>
                                 </div>
-                                
+
                                 {canManageClasses && (
                                     <div className="flex gap-2 mt-4 pt-4 border-t border-border">
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
                                             className="flex-1 rounded-full"
                                             onClick={() => handleEdit(cls)}
                                             data-testid={`edit-class-${cls.id}`}
@@ -363,9 +378,9 @@ export default function ClassesPage() {
                                             <Edit2 className="w-4 h-4 mr-1" />
                                             Edit
                                         </Button>
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
                                             className="rounded-full text-destructive hover:bg-destructive/10"
                                             onClick={() => setDeleteTarget({ id: cls.id, name: cls.name })}
                                             data-testid={`delete-class-${cls.id}`}
@@ -374,7 +389,7 @@ export default function ClassesPage() {
                                         </Button>
                                     </div>
                                 )}
-                            </CardContent>
+                                </CardContent>
                         </Card>
                     ))}
                 </div>
@@ -393,6 +408,53 @@ export default function ClassesPage() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Enrolled students dialog */}
+            <Dialog open={!!viewClass} onOpenChange={(open) => { if (!open) setViewClass(null); }}>
+                <DialogContent className="max-w-lg" data-testid="class-students-dialog">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <School className="w-5 h-5 text-primary" />
+                            {viewClass?.name} &middot; Enrolled Students
+                        </DialogTitle>
+                    </DialogHeader>
+                    {(() => {
+                        if (!viewClass) return null;
+                        const roster = students
+                            .filter((s) => s.class_id === viewClass.id)
+                            .sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`));
+                        if (roster.length === 0) {
+                            return <p className="text-sm text-muted-foreground py-6 text-center">No students are enrolled in this class yet.</p>;
+                        }
+                        return (
+                            <div className="max-h-[60vh] overflow-y-auto -mx-2 px-2 space-y-1">
+                                {roster.map((s) => (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => { setViewClass(null); navigate(`/students/${s.id}`); }}
+                                        className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/60 transition-colors text-left group"
+                                        data-testid={`class-student-${s.id}`}
+                                    >
+                                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm shrink-0">
+                                            {s.first_name?.[0]}{s.last_name?.[0]}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-sm truncate group-hover:text-primary transition-colors">
+                                                {s.last_name}, {s.first_name}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                {s.student_id || '—'}{s.gender ? ` · ${s.gender}` : ''}
+                                            </p>
+                                        </div>
+                                        <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">View &rarr;</span>
+                                    </button>
+                                ))}
+                            </div>
+                        );
+                    })()}
+                </DialogContent>
+            </Dialog>
 
             <ConfirmDialog
                 open={!!deleteTarget}

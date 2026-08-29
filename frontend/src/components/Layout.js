@@ -91,10 +91,9 @@ const NAV_GROUPS = [
         icon: FileText,
         items: [
             { to: '/classes', label: 'Class List', icon: School, roles: ['superuser', 'admin', 'teacher'] },
-            { to: '/gradebook', label: 'Gradebook', icon: BookOpen, roles: ['superuser', 'admin', 'teacher'] },
             { to: '/report-manager/comments', label: "Form Teacher's Comment", icon: MessageSquare, roles: ['superuser', 'admin', 'teacher'] },
             { to: '/report-manager/social-skills', label: 'Social Skills', icon: Sparkles, roles: ['superuser', 'admin', 'teacher'] },
-            { to: '/reports', label: 'Term Report Generation', icon: FileText, roles: ['superuser', 'admin', 'teacher'] },
+            { to: '/reports', label: 'Report Generation', icon: FileText, roles: ['superuser', 'admin', 'teacher'] },
             { to: '/mhps-report-cards', label: 'MHPS Report Card', icon: FileText, roles: ['superuser', 'admin', 'teacher', 'parent'], schools: ['MHPS'] },
         ],
     },

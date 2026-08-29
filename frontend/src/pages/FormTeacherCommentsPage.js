@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
-import { MessageSquare, Loader2, Save, CheckCircle2 } from 'lucide-react';
+import { MessageSquare, Loader2, Save, CheckCircle2, Plus, Trash2, Lightbulb } from 'lucide-react';
 import { useDefaultAcademicYear } from '../hooks/useDefaultAcademicYear';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -21,8 +22,10 @@ const FALLBACK_YEARS = [
 ];
 
 export default function FormTeacherCommentsPage() {
-    const { isAdmin, isTeacher } = useAuth();
+    const { isAdmin, isTeacher, user } = useAuth();
     const canEdit = isAdmin || isTeacher;
+    const isSuperuser = user?.role === 'superuser';
+    const canManagePresets = isAdmin || isSuperuser;
 
     const [classes, setClasses] = useState([]);
     const [selectedClass, setSelectedClass] = useState('');
@@ -37,6 +40,53 @@ export default function FormTeacherCommentsPage() {
     const [savingId, setSavingId] = useState('');
     const [savingAll, setSavingAll] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    // Generic (school-specific) comment presets
+    const [presets, setPresets] = useState([]);
+    const [newPreset, setNewPreset] = useState('');
+    const [addingPreset, setAddingPreset] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const r = await axios.get(`${API}/comment-presets`);
+                setPresets(r.data?.presets || []);
+            } catch (_e) { /* non-fatal */ }
+        })();
+    }, []);
+
+    const addPreset = async () => {
+        const text = newPreset.trim();
+        if (!text) return;
+        setAddingPreset(true);
+        try {
+            const r = await axios.post(`${API}/comment-presets`, { text });
+            setPresets((p) => [...p, r.data]);
+            setNewPreset('');
+            toast.success('Generic comment added');
+        } catch (_e) {
+            toast.error('Failed to add comment');
+        } finally {
+            setAddingPreset(false);
+        }
+    };
+
+    const deletePreset = async (id) => {
+        try {
+            await axios.delete(`${API}/comment-presets/${id}`);
+            setPresets((p) => p.filter((x) => x.id !== id));
+            toast.success('Generic comment removed');
+        } catch (_e) {
+            toast.error('Failed to remove comment');
+        }
+    };
+
+    const insertPreset = (studentId, text) => {
+        if (!text) return;
+        const cur = comments[studentId] || '';
+        const joined = cur.trim() ? `${cur.trim()} ${text}` : text;
+        setCommentFor(studentId, joined);
+    };
 
     // initial classes
     useEffect(() => {
@@ -220,6 +270,65 @@ export default function FormTeacherCommentsPage() {
                 </span>
             </div>
 
+            {/* Generic comments (school-specific) */}
+            <Card className="rounded-2xl border-border shadow-sm mb-4" data-testid="generic-comments-panel">
+                <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <Lightbulb className="w-4 h-4 text-amber-500" />
+                        Generic Comments
+                        <span className="text-xs font-normal text-muted-foreground">
+                            (school-specific &middot; pick one from each student&apos;s &ldquo;Insert&rdquo; menu)
+                        </span>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                    {presets.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No generic comments yet.</p>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {presets.map((pr) => (
+                                <span key={pr.id} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-primary/8 border border-primary/15 text-xs max-w-full">
+                                    <span className="truncate max-w-[320px]">{pr.text}</span>
+                                    {canManagePresets && (
+                                        <button
+                                            type="button"
+                                            onClick={() => deletePreset(pr.id)}
+                                            className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-destructive/15 text-destructive"
+                                            title="Delete comment"
+                                            data-testid={`delete-preset-${pr.id}`}
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    {canManagePresets && (
+                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                            <Input
+                                value={newPreset}
+                                onChange={(e) => setNewPreset(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') addPreset(); }}
+                                placeholder="Add a new generic comment for your school…"
+                                className="h-9 rounded-lg text-sm"
+                                data-testid="new-preset-input"
+                            />
+                            <Button
+                                size="sm"
+                                onClick={addPreset}
+                                disabled={addingPreset || !newPreset.trim()}
+                                className="rounded-lg h-9 shrink-0"
+                                data-testid="add-preset-btn"
+                            >
+                                {addingPreset ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />}
+                                Add
+                            </Button>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
             {/* Comments grid */}
             {loading ? (
                 <div className="flex items-center justify-center py-16">
@@ -274,21 +383,37 @@ export default function FormTeacherCommentsPage() {
                                         className="rounded-lg text-sm"
                                         data-testid={`comment-textarea-${s.id}`}
                                     />
-                                    <div className="flex items-center justify-between mt-2">
-                                        <span className="text-[11px] text-muted-foreground">{text.length} characters</span>
-                                        {canEdit && (
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() => saveOne(s.id)}
-                                                disabled={savingId === s.id || !isDirty}
-                                                className="rounded-lg text-xs h-8"
-                                                data-testid={`save-comment-${s.id}`}
-                                            >
-                                                {savingId === s.id ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
-                                                Save
-                                            </Button>
-                                        )}
+                                    <div className="flex items-center justify-between mt-2 gap-2">
+                                        <span className="text-[11px] text-muted-foreground shrink-0">{text.length} characters</span>
+                                        <div className="flex items-center gap-2">
+                                            {canEdit && presets.length > 0 && (
+                                                <Select value="" onValueChange={(val) => insertPreset(s.id, val)}>
+                                                    <SelectTrigger className="h-8 rounded-lg text-xs w-[150px]" data-testid={`insert-preset-${s.id}`}>
+                                                        <SelectValue placeholder="Insert comment…" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="max-w-[360px]">
+                                                        {presets.map((pr) => (
+                                                            <SelectItem key={pr.id} value={pr.text} className="text-xs">
+                                                                {pr.text.length > 70 ? `${pr.text.slice(0, 70)}…` : pr.text}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                            {canEdit && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => saveOne(s.id)}
+                                                    disabled={savingId === s.id || !isDirty}
+                                                    className="rounded-lg text-xs h-8"
+                                                    data-testid={`save-comment-${s.id}`}
+                                                >
+                                                    {savingId === s.id ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
+                                                    Save
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>

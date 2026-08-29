@@ -357,6 +357,9 @@ const MHPSReportCardTemplate = forwardRef(({ data }, ref) => {
       {/* ---------- SIGNATURES ---------- */}
       <div style={{ marginTop: '22px', display: 'flex', justifyContent: 'space-between', fontSize: '11.5px' }}>
         <div>
+          <div style={{ fontSize: '11.5px', fontWeight: 700, color: INK, textAlign: 'center', minHeight: '16px' }}>
+            {data?.class_info?.teacher_name || ''}
+          </div>
           <div style={{ borderTop: `1px solid ${INK}`, width: '280px', textAlign: 'center', paddingTop: '4px' }}>
             Class Teacher&rsquo;s Signature
           </div>

@@ -66,20 +66,14 @@ export default function StaffProfilePage() {
         return STAFF_TABS.find((t) => t.key === hash) ? hash : 'dashboard';
     });
 
-    // Collapsible roster rail + scroll-spy refs
+    // Collapsible roster rail
     const [rosterCollapsed, setRosterCollapsed] = useState(false);
-    const sectionRefs = useRef({});
     const mainScrollRef = useRef(null);
-    const isScrollingByClick = useRef(false);
 
     const scrollToSection = useCallback((key) => {
-        const el = sectionRefs.current[key];
-        if (!el) return;
-        isScrollingByClick.current = true;
         setActiveTab(key);
         window.history.replaceState(null, '', `${window.location.pathname}#${key}`);
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        window.setTimeout(() => { isScrollingByClick.current = false; }, 700);
+        if (mainScrollRef.current) mainScrollRef.current.scrollTo({ top: 0, behavior: 'auto' });
     }, []);
 
     useEffect(() => {
@@ -152,27 +146,6 @@ export default function StaffProfilePage() {
     const onTabChange = useCallback((key) => {
         scrollToSection(key);
     }, [scrollToSection]);
-
-    // Scroll-spy: highlight the chip for whichever section is in view
-    useEffect(() => {
-        if (!staff) return;
-        const root = mainScrollRef.current;
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (isScrollingByClick.current) return;
-                const visible = entries
-                    .filter((e) => e.isIntersecting)
-                    .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-                if (visible.length > 0) {
-                    const key = visible[0].target.getAttribute('data-key');
-                    if (key) setActiveTab(key);
-                }
-            },
-            { root, rootMargin: '-120px 0px -55% 0px', threshold: [0.01, 0.15, 0.5] }
-        );
-        Object.values(sectionRefs.current).forEach((el) => el && observer.observe(el));
-        return () => observer.disconnect();
-    }, [staff]);
 
     const selectStaff = useCallback((id) => {
         if (id === userId) return;
@@ -290,7 +263,7 @@ export default function StaffProfilePage() {
                             </div>
 
                             <div className="roster-footer">
-                                <span data-testid="staff-roster-count">Count: {filteredRoster.length}</span>
+                                <span data-testid="staff-roster-count">Total: {filteredRoster.length}</span>
                                 <Link to="/users" className="lp-link" data-testid="staff-roster-add-link">
                                     Manage
                                 </Link>
@@ -347,21 +320,22 @@ export default function StaffProfilePage() {
                                 ))}
                             </nav>
 
-                            {/* CONTINUOUS SECTIONS */}
+                            {/* ACTIVE SECTION (own window) */}
                             <div className="lp-sections">
-                                {STAFF_TABS.map((t) => (
-                                    <section
-                                        key={t.key}
-                                        id={`sec-${t.key}`}
-                                        data-key={t.key}
-                                        data-accent={staffAccentFor(t.key)}
-                                        ref={(el) => { sectionRefs.current[t.key] = el; }}
-                                        className="lp-section"
-                                    >
-                                        <h2 className="lp-section__title">{t.label}</h2>
-                                        {renderSection(t.key)}
-                                    </section>
-                                ))}
+                                {(() => {
+                                    const t = STAFF_TABS.find((x) => x.key === activeTab) || STAFF_TABS[0];
+                                    return (
+                                        <section
+                                            id={`sec-${t.key}`}
+                                            data-key={t.key}
+                                            data-accent={staffAccentFor(t.key)}
+                                            className="lp-section"
+                                        >
+                                            <h2 className="lp-section__title">{t.label}</h2>
+                                            {renderSection(t.key)}
+                                        </section>
+                                    );
+                                })()}
                             </div>
                         </>
                     )}

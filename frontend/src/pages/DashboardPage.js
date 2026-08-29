@@ -274,39 +274,6 @@ export default function DashboardPage() {
                 </Card>
             )}
 
-            {/* Recent Students */}
-            {recentStudents.length > 0 && (
-                <Card className="rounded-2xl border-border shadow-sm opacity-0 animate-fade-in" style={{ animationDelay: '400ms' }}>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-lg">
-                            <GraduationCap className="w-5 h-5 text-primary" />
-                            {isParent ? 'My Children' : isTeacher ? 'My Students' : 'Recent Students'}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-1">
-                            {recentStudents.map((student, index) => (
-                                <div 
-                                    key={student.id}
-                                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors group"
-                                >
-                                    <div className="w-9 h-9 rounded-lg bg-primary/8 flex items-center justify-center text-primary font-semibold text-sm">
-                                        {student.first_name?.[0]}{student.last_name?.[0]}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-semibold text-sm text-foreground">{student.first_name} {student.last_name}</p>
-                                        <p className="text-xs text-muted-foreground">Grade {student.grade_level}</p>
-                                    </div>
-                                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium capitalize">
-                                        {student.gender}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-
             {/* Empty state if no data */}
             {recentStudents.length === 0 && (
                 <Card className="rounded-2xl border-border shadow-sm">

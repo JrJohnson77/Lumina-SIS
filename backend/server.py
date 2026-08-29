@@ -537,6 +537,14 @@ DEFAULT_SOCIAL_SKILLS = [
     ]},
 ]
 
+DEFAULT_SKILL_RATINGS = [
+    {"code": "EX", "label": "Excellent"},
+    {"code": "VG", "label": "Very Good"},
+    {"code": "G", "label": "Good"},
+    {"code": "S", "label": "Satisfactory"},
+    {"code": "NI", "label": "Needs Improvement"},
+]
+
 DEFAULT_ACHIEVEMENT_STANDARDS = [
     {"min": 85, "max": 100, "band": "Highly Proficient", "description": "Student demonstrates excellent understanding and consistently produces outstanding work."},
     {"min": 70, "max": 84, "band": "Proficient", "description": "Student shows good understanding and produces quality work."},
@@ -2687,7 +2695,8 @@ async def get_student_report_card(
         "awards": student.get("awards") or [],
         "personal_development": student.get("personal_development") or {},
         "behavioural": behavioural,
-        "advisor": student.get("advisor") or class_info.get("teacher_name", ""),
+        "advisor": class_info.get("teacher_name") or student.get("advisor") or "",
+        "form_teacher_name": class_info.get("teacher_name", ""),
         "school": {
             "code": school_doc.get("school_code", current_user["school_code"]),
             "name": school_doc.get("name", ""),
@@ -2999,7 +3008,126 @@ async def get_class_social_skills(
 
 # ==================== TEACHER COMMENTS (Form Teacher's Comment) ====================
 
-@api_router.post("/teacher-comments")
+DEFAULT_COMMENT_PRESETS = [
+    "A conscientious student who consistently produces excellent work.",
+    "Has shown steady improvement this term — keep up the good effort.",
+    "A pleasant and cooperative member of the class.",
+    "Needs to participate more actively in class discussions.",
+    "Should pay closer attention to detail when completing assignments.",
+    "Works well both independently and within groups.",
+    "Is encouraged to submit all assignments on time.",
+    "A polite student who observes the rules of the school.",
+    "Has the ability to achieve more with consistent effort.",
+    "Reads well and is encouraged to read more widely.",
+    "Displays good leadership qualities among peers.",
+    "Should aim to be less talkative and more focused during lessons.",
+]
+
+
+async def _seed_comment_presets_if_empty(school_code: str):
+    """Lazily provide a starter set of generic comments for a school."""
+    count = await db.comment_presets.count_documents({"school_code": school_code})
+    if count == 0:
+        now = datetime.now(timezone.utc).isoformat()
+        docs = [
+            {
+                "id": str(uuid.uuid4()),
+                "school_code": school_code,
+                "text": t,
+                "order": i,
+                "created_at": now,
+            }
+            for i, t in enumerate(DEFAULT_COMMENT_PRESETS)
+        ]
+        if docs:
+            await db.comment_presets.insert_many(docs)
+
+
+@api_router.get("/comment-presets")
+async def list_comment_presets(current_user: dict = Depends(get_current_user)):
+    """Generic form-teacher comments teachers can insert. Tenant-scoped."""
+    sc = current_user["school_code"]
+    await _seed_comment_presets_if_empty(sc)
+    presets = await db.comment_presets.find(
+        {"school_code": sc}, {"_id": 0}
+    ).sort("order", 1).to_list(500)
+    return {"presets": presets}
+
+
+@api_router.post("/comment-presets")
+async def create_comment_preset(
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_roles(["admin"])),
+):
+    sc = current_user["school_code"]
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Comment text is required")
+    count = await db.comment_presets.count_documents({"school_code": sc})
+    doc = {
+        "id": str(uuid.uuid4()),
+        "school_code": sc,
+        "text": text,
+        "order": payload.get("order", count),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.comment_presets.insert_one(dict(doc))
+    await write_audit(current_user, "create", "comment_preset", doc["id"], text[:60])
+    return doc
+
+
+@api_router.delete("/comment-presets/{preset_id}")
+async def delete_comment_preset(
+    preset_id: str,
+    current_user: dict = Depends(require_roles(["admin"])),
+):
+    sc = current_user["school_code"]
+    result = await db.comment_presets.delete_one({"id": preset_id, "school_code": sc})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Comment preset not found")
+    await write_audit(current_user, "delete", "comment_preset", preset_id, "")
+    return {"message": "Comment preset deleted"}
+
+
+# ==================== SOCIAL SKILL SCALE (school-specific) ====================
+
+@api_router.get("/social-skill-scale")
+async def get_social_skill_scale(current_user: dict = Depends(get_current_user)):
+    """Return the school's social-skill categories + rating scale."""
+    sc = current_user["school_code"]
+    tpl = await db.report_templates.find_one(
+        {"school_code": sc},
+        {"_id": 0, "social_skills_categories": 1, "skill_ratings": 1},
+    ) or {}
+    categories = tpl.get("social_skills_categories") or DEFAULT_SOCIAL_SKILLS
+    ratings = tpl.get("skill_ratings") or DEFAULT_SKILL_RATINGS
+    return {"categories": categories, "ratings": ratings}
+
+
+@api_router.put("/social-skill-scale")
+async def update_social_skill_scale(
+    payload: Dict[str, Any],
+    current_user: dict = Depends(require_roles(["admin"])),
+):
+    """Superuser/Admin: create/delete social-skill categories & rating levels.
+    Tenant-scoped to the caller's school."""
+    sc = current_user["school_code"]
+    update = {}
+    if "categories" in payload:
+        update["social_skills_categories"] = payload["categories"]
+    if "ratings" in payload:
+        update["skill_ratings"] = payload["ratings"]
+    if not update:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.report_templates.update_one(
+        {"school_code": sc}, {"$set": update}, upsert=True
+    )
+    await write_audit(current_user, "update", "social_skill_scale", sc, "")
+    return await get_social_skill_scale(current_user)
+
+
+
 async def save_teacher_comment(
     entry: TeacherCommentEntry,
     current_user: dict = Depends(require_permission("manage_grades"))

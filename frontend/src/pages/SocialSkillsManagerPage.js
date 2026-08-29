@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Sparkles, Loader2, Save, Settings as SettingsIcon } from 'lucide-react';
+import { Sparkles, Loader2, Save, Settings as SettingsIcon, Plus, Trash2, X } from 'lucide-react';
 import { useDefaultAcademicYear } from '../hooks/useDefaultAcademicYear';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -44,8 +44,10 @@ const normalizeRatings = (rs) => (rs || []).map((r) =>
 );
 
 export default function SocialSkillsManagerPage() {
-    const { schoolCode, isAdmin, isTeacher } = useAuth();
+    const { schoolCode, isAdmin, isTeacher, user } = useAuth();
     const canEdit = isAdmin || isTeacher;
+    const isSuperuser = user?.role === 'superuser';
+    const canManageScale = isAdmin || isSuperuser;
 
     const [classes, setClasses] = useState([]);
     const [selectedClass, setSelectedClass] = useState('');
@@ -62,6 +64,13 @@ export default function SocialSkillsManagerPage() {
     const [savingId, setSavingId] = useState('');
     const [savingAll, setSavingAll] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    // Scale management (admin / superuser)
+    const [manageOpen, setManageOpen] = useState(false);
+    const [newSkill, setNewSkill] = useState('');
+    const [newRatingCode, setNewRatingCode] = useState('');
+    const [newRatingLabel, setNewRatingLabel] = useState('');
+    const [savingScale, setSavingScale] = useState(false);
 
     const tplSkillRatings = useMemo(
         () => normalizeRatings(template?.skill_ratings) || [],
@@ -80,6 +89,62 @@ export default function SocialSkillsManagerPage() {
         }
         return out;
     }, [categories]);
+
+    // ---- Scale management (school-specific, admin/superuser) ----
+    const saveScale = useCallback(async (nextCategories, nextRatings) => {
+        setSavingScale(true);
+        try {
+            const res = await axios.put(`${API}/social-skill-scale`, {
+                categories: nextCategories,
+                ratings: nextRatings,
+            });
+            setTemplate((prev) => ({
+                ...(prev || {}),
+                social_skills_categories: res.data?.categories ?? nextCategories,
+                skill_ratings: res.data?.ratings ?? nextRatings,
+            }));
+            toast.success('Social skill scale updated');
+        } catch (_e) {
+            toast.error('Failed to update scale');
+        } finally {
+            setSavingScale(false);
+        }
+    }, []);
+
+    const addSkill = () => {
+        const name = newSkill.trim();
+        if (!name) return;
+        const cats = JSON.parse(JSON.stringify(categories));
+        if (cats.length === 0) cats.push({ category_name: 'Social Skills', skills: [] });
+        if (!(cats[0].skills || []).includes(name)) cats[0].skills = [...(cats[0].skills || []), name];
+        setNewSkill('');
+        saveScale(cats, skillRatings);
+    };
+
+    const deleteSkill = (catName, skill) => {
+        const cats = categories.map((c) => ({
+            ...c,
+            skills: (c.skills || []).filter((s) => !(c.category_name === catName && s === skill)),
+        }));
+        saveScale(cats, skillRatings);
+    };
+
+    const addRating = () => {
+        const code = newRatingCode.trim().toUpperCase();
+        const label = newRatingLabel.trim() || code;
+        if (!code) return;
+        if (skillRatings.some((r) => r.code === code)) {
+            toast.error('That rating code already exists');
+            return;
+        }
+        setNewRatingCode('');
+        setNewRatingLabel('');
+        saveScale(categories, [...skillRatings, { code, label }]);
+    };
+
+    const deleteRating = (code) => {
+        saveScale(categories, skillRatings.filter((r) => r.code !== code));
+    };
 
     // Load initial classes + template
     useEffect(() => {
@@ -193,18 +258,111 @@ export default function SocialSkillsManagerPage() {
                     </h1>
                     <p>Rate students against the school&apos;s customizable social-skill categories. Ratings appear on the generated report card.</p>
                 </div>
-                {isAdmin && (
-                    <Link
-                        to="/gradebook"
-                        className="text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-muted/40 hover:bg-muted text-foreground self-start"
-                        data-testid="open-settings-link"
-                        title="Open Gradebook → Settings to customize categories and rating scale"
+                {canManageScale && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setManageOpen((v) => !v)}
+                        className="self-start rounded-lg h-9 text-xs"
+                        data-testid="manage-scale-btn"
                     >
-                        <SettingsIcon className="w-3.5 h-3.5" />
-                        Customize in Gradebook Settings
-                    </Link>
+                        <SettingsIcon className="w-3.5 h-3.5 mr-1.5" />
+                        {manageOpen ? 'Close Scale Manager' : 'Manage Scale'}
+                    </Button>
                 )}
             </div>
+
+            {/* Scale manager (school-specific) */}
+            {canManageScale && manageOpen && (
+                <Card className="rounded-2xl border-border shadow-sm mb-4" data-testid="scale-manager-panel">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-primary" />
+                            Social Skill Scale
+                            <span className="text-xs font-normal text-muted-foreground">(applies only to this school)</span>
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Skills */}
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Skills / Criteria</p>
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                {allSkills.length === 0 && <span className="text-sm text-muted-foreground">No skills yet.</span>}
+                                {allSkills.map((sk) => (
+                                    <span key={`${sk.category}-${sk.skill}`} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-primary/8 border border-primary/15 text-xs">
+                                        {sk.skill}
+                                        <button
+                                            type="button"
+                                            onClick={() => deleteSkill(sk.category, sk.skill)}
+                                            disabled={savingScale}
+                                            className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-destructive/15 text-destructive"
+                                            title="Delete skill"
+                                            data-testid={`delete-skill-${sk.skill.replace(/\s+/g, '-').toLowerCase()}`}
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    value={newSkill}
+                                    onChange={(e) => setNewSkill(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') addSkill(); }}
+                                    placeholder="Add a skill…"
+                                    className="h-9 rounded-lg text-sm"
+                                    data-testid="new-skill-input"
+                                />
+                                <Button size="sm" onClick={addSkill} disabled={savingScale || !newSkill.trim()} className="rounded-lg h-9 shrink-0" data-testid="add-skill-btn">
+                                    <Plus className="w-4 h-4 mr-1" /> Add
+                                </Button>
+                            </div>
+                        </div>
+                        {/* Rating levels */}
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Rating Scale</p>
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                {skillRatings.map((r) => (
+                                    <span key={r.code} className="inline-flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-full bg-muted/50 border border-border text-xs">
+                                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold">{r.code}</span>
+                                        <span className="text-muted-foreground">{r.label}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => deleteRating(r.code)}
+                                            disabled={savingScale}
+                                            className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-destructive/15 text-destructive"
+                                            title="Delete rating"
+                                            data-testid={`delete-rating-${r.code}`}
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    value={newRatingCode}
+                                    onChange={(e) => setNewRatingCode(e.target.value)}
+                                    placeholder="Code"
+                                    className="h-9 rounded-lg text-sm w-20 shrink-0"
+                                    data-testid="new-rating-code"
+                                />
+                                <Input
+                                    value={newRatingLabel}
+                                    onChange={(e) => setNewRatingLabel(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') addRating(); }}
+                                    placeholder="Label (e.g. Excellent)"
+                                    className="h-9 rounded-lg text-sm"
+                                    data-testid="new-rating-label"
+                                />
+                                <Button size="sm" onClick={addRating} disabled={savingScale || !newRatingCode.trim()} className="rounded-lg h-9 shrink-0" data-testid="add-rating-btn">
+                                    <Plus className="w-4 h-4 mr-1" /> Add
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Filter row */}
             <Card className="rounded-2xl border-border shadow-sm mb-4">
