@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, BackgroundTasks, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -584,6 +584,38 @@ def build_default_template(school_code: str, school_name: str) -> dict:
 
 # ==================== AUTH HELPERS ====================
 
+# --- Login rate limiting (item 1.3) ---
+# In-process sliding window keyed by (client_ip, username): max 5 attempts / 60s.
+LOGIN_RATE_LIMIT = 5
+LOGIN_RATE_WINDOW_SECONDS = 60
+_login_attempts: Dict[tuple, List[float]] = {}
+
+def _login_rate_key(request: Request, username: str) -> tuple:
+    ip = request.client.host if request and request.client else "unknown"
+    fwd = request.headers.get("x-forwarded-for") if request else None
+    if fwd:
+        ip = fwd.split(",")[0].strip()
+    return (ip, (username or "").lower())
+
+def _check_login_rate_limit(key: tuple):
+    now = datetime.now(timezone.utc).timestamp()
+    window_start = now - LOGIN_RATE_WINDOW_SECONDS
+    attempts = [t for t in _login_attempts.get(key, []) if t >= window_start]
+    _login_attempts[key] = attempts
+    if len(attempts) >= LOGIN_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Please wait a minute and try again.",
+        )
+
+def _record_login_failure(key: tuple):
+    now = datetime.now(timezone.utc).timestamp()
+    _login_attempts.setdefault(key, []).append(now)
+
+def _clear_login_attempts(key: tuple):
+    _login_attempts.pop(key, None)
+
+
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
@@ -652,14 +684,22 @@ def require_superuser():
     return superuser_checker
 
 
+def assert_same_school_or_superuser(current_user: dict, school_code: str):
+    """Central tenant check (item 1.7): allow if superuser, else require the
+    user's school_code to match the target. Raises 403 otherwise.
+    The target school_code is passed explicitly because it is only known once
+    path params / bodies / looked-up docs are resolved per endpoint."""
+    if current_user["role"] != UserRole.SUPERUSER and current_user["school_code"] != school_code:
+        raise HTTPException(status_code=403, detail="Not authorized for this school")
+
+
 async def assert_school_tenant(school_id: str, current_user: dict) -> dict:
     """Look up a school by id and assert the current user has tenant access.
     Returns the school document. Raises 404 if not found, 403 if cross-tenant."""
     school = await db.schools.find_one({"id": school_id}, {"_id": 0})
     if not school:
         raise HTTPException(status_code=404, detail="School not found")
-    if current_user["role"] != UserRole.SUPERUSER and school.get("school_code") != current_user["school_code"]:
-        raise HTTPException(status_code=403, detail="Cross-tenant access denied")
+    assert_same_school_or_superuser(current_user, school.get("school_code"))
     return school
 
 
@@ -740,39 +780,49 @@ async def create_superuser():
 # ==================== AUTH ROUTES ====================
 
 @api_router.post("/auth/login", response_model=TokenResponse)
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, request: Request):
     # Normalize school code to uppercase
     school_code = credentials.school_code.upper()
-    
+
+    # --- Rate limiting (item 1.3): 5 attempts / minute per (IP, username) ---
+    rate_key = _login_rate_key(request, credentials.username)
+    _check_login_rate_limit(rate_key)
+
+    async def _fail(detail: str = "Invalid credentials"):
+        _record_login_failure(rate_key)
+        await write_audit(
+            {"school_code": school_code, "id": "", "name": credentials.username, "role": ""},
+            "login_fail", "user", credentials.username or "unknown",
+            f"failed login from {rate_key[0]}",
+        )
+        raise HTTPException(status_code=401, detail=detail)
+
     # Check if school exists and is active
     school = await db.schools.find_one({"school_code": school_code, "is_active": True})
     if not school:
-        # Use the same message/status as bad credentials so callers can't
-        # enumerate valid school codes.
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+        # Same message/status as bad credentials so callers can't enumerate school codes.
+        await _fail()
+
     # First, try to find the user in the requested school
     user = await db.users.find_one({
         "username": credentials.username,
         "school_code": school_code
     }, {"_id": 0})
-    
+
     # If not found, check if user is a superuser trying to access another school
     if not user:
-        # Look for a superuser with this username
         superuser = await db.users.find_one({
             "username": credentials.username,
             "role": UserRole.SUPERUSER
         }, {"_id": 0})
-        
+
         if superuser and verify_password(credentials.password, superuser["password_hash"]):
-            # Superuser can log into any school - use the requested school_code for this session
+            _clear_login_attempts(rate_key)
             token = create_access_token({
-                "sub": superuser["id"], 
+                "sub": superuser["id"],
                 "role": superuser["role"],
                 "school_code": school_code  # Use the requested school context
             })
-            
             return TokenResponse(
                 access_token=token,
                 user=UserResponse(
@@ -780,21 +830,22 @@ async def login(credentials: UserLogin):
                     username=superuser["username"],
                     name=superuser["name"],
                     role=superuser["role"],
-                    school_code=school_code,  # Return the school they're logging into
+                    school_code=school_code,
                     permissions=superuser.get("permissions", []),
                     created_at=superuser["created_at"]
                 )
             )
-    
+
     if not user or not verify_password(credentials.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+        await _fail()
+
+    _clear_login_attempts(rate_key)
     token = create_access_token({
-        "sub": user["id"], 
+        "sub": user["id"],
         "role": user["role"],
         "school_code": school_code
     })
-    
+
     return TokenResponse(
         access_token=token,
         user=UserResponse(
@@ -909,8 +960,7 @@ async def get_school(school_id: str, current_user: dict = Depends(get_current_us
     school = await db.schools.find_one({"id": school_id}, {"_id": 0})
     if not school:
         raise HTTPException(status_code=404, detail="School not found")
-    if current_user["role"] != UserRole.SUPERUSER and school.get("school_code") != current_user["school_code"]:
-        raise HTTPException(status_code=403, detail="Access to this school is denied")
+    assert_same_school_or_superuser(current_user, school.get("school_code"))
     return SchoolResponse(**school)
 
 @api_router.put("/schools/{school_id}", response_model=SchoolResponse)
@@ -1179,6 +1229,15 @@ async def upload_school_signature(
     
     signature_url = f"/api/uploads/{filename}"
     
+    await db.uploads.insert_one({
+        "id": str(uuid.uuid4()),
+        "filename": filename,
+        "school_code": school["school_code"],
+        "uploaded_by": current_user["id"],
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "purpose": "signature",
+    })
+    
     # Update school with signature
     field_name = f"{signature_type}_signature"
     await db.schools.update_one(
@@ -1309,8 +1368,7 @@ async def get_system_default_template(current_user: dict = Depends(get_current_u
 async def get_report_template(school_code: str, current_user: dict = Depends(get_current_user)):
     """Get report template for a school. Any authenticated user can read their own school's template."""
     sc = school_code.upper()
-    if current_user["role"] != UserRole.SUPERUSER and current_user["school_code"] != sc:
-        raise HTTPException(status_code=403, detail="Cannot access template of another school")
+    assert_same_school_or_superuser(current_user, sc)
     template = await db.report_templates.find_one(
         {"school_code": sc}, {"_id": 0}
     )
@@ -1477,8 +1535,7 @@ async def update_template_theme(
     (colors, fonts, grade scale). Role: admin/superuser.
     Admins can re-skin their OWN school; layout stays locked."""
     sc = school_code.upper()
-    if current_user["role"] != UserRole.SUPERUSER and current_user["school_code"] != sc:
-        raise HTTPException(status_code=403, detail="Cross-tenant access denied")
+    assert_same_school_or_superuser(current_user, sc)
     tpl = await _get_or_seed_template(sc)
     body = dict(tpl.get("body") or {})
     theme = dict(body.get("theme") or {})
@@ -1831,11 +1888,7 @@ async def get_user_by_id(
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if (
-        current_user["role"] != UserRole.SUPERUSER
-        and user.get("school_code") != current_user["school_code"]
-    ):
-        raise HTTPException(status_code=403, detail="Cross-tenant access denied")
+    assert_same_school_or_superuser(current_user, user.get("school_code"))
     return UserResponse(**user)
 
 @api_router.post("/users", response_model=UserResponse)
@@ -1920,8 +1973,7 @@ async def update_user_role(user_id: str, role_data: RoleUpdate, current_user: di
         raise HTTPException(status_code=404, detail="User not found")
     
     # Non-superusers can only modify users in their school
-    if current_user["role"] != UserRole.SUPERUSER and user["school_code"] != current_user["school_code"]:
-        raise HTTPException(status_code=403, detail="Cannot modify users from other schools")
+    assert_same_school_or_superuser(current_user, user["school_code"])
     
     # Cannot modify superuser unless you are superuser
     if user["role"] == UserRole.SUPERUSER and current_user["role"] != UserRole.SUPERUSER:
@@ -1945,8 +1997,8 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_roles([
         raise HTTPException(status_code=404, detail="User not found")
     
     # Non-superusers can only delete users in their school
-    if current_user["role"] != UserRole.SUPERUSER and user["school_code"] != current_user["school_code"]:
-        raise HTTPException(status_code=403, detail="Cannot delete users from other schools")
+    assert_same_school_or_superuser(current_user, user["school_code"])
+    # delete user
     
     # Cannot delete superuser
     if user["role"] == UserRole.SUPERUSER:
@@ -1976,8 +2028,7 @@ async def reset_user_credentials(
     
     # Admins can only reset users in their school
     if current_user["role"] != UserRole.SUPERUSER:
-        if user["school_code"] != current_user["school_code"]:
-            raise HTTPException(status_code=403, detail="Cannot reset credentials for users in other schools")
+        assert_same_school_or_superuser(current_user, user["school_code"])
     
     # Cannot reset superuser credentials unless you are a superuser
     if user["role"] == UserRole.SUPERUSER and current_user["role"] != UserRole.SUPERUSER:
@@ -2033,8 +2084,7 @@ async def update_user_profile(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Admins can only edit users in their own school
-    if current_user["role"] != UserRole.SUPERUSER and user.get("school_code") != current_user["school_code"]:
-        raise HTTPException(status_code=403, detail="Cannot modify users from other schools")
+    assert_same_school_or_superuser(current_user, user.get("school_code"))
 
     # Only a superuser can edit a superuser
     if user.get("role") == UserRole.SUPERUSER and current_user["role"] != UserRole.SUPERUSER:
@@ -2877,7 +2927,17 @@ async def upload_photo(
     
     # Return the URL to access the photo
     photo_url = f"/api/uploads/{filename}"
-    
+
+    # 1.5: track ownership for tenant-scoped download authorization
+    await db.uploads.insert_one({
+        "id": str(uuid.uuid4()),
+        "filename": filename,
+        "school_code": current_user["school_code"],
+        "uploaded_by": current_user["id"],
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "purpose": "photo",
+    })
+
     return {"photo_url": photo_url, "filename": filename}
 
 @api_router.post("/upload/template-background")
@@ -2897,15 +2957,30 @@ async def upload_template_background(
     file_path = UPLOAD_DIR / filename
     with open(file_path, "wb") as f:
         f.write(content)
+    await db.uploads.insert_one({
+        "id": str(uuid.uuid4()),
+        "filename": filename,
+        "school_code": current_user["school_code"],
+        "uploaded_by": current_user["id"],
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "purpose": "template_bg",
+    })
     return {"background_url": f"/api/uploads/{filename}", "filename": filename}
 
 @api_router.get("/uploads/{filename}")
-async def get_upload(filename: str):
-    """Serve uploaded files"""
+async def get_upload(filename: str, current_user: dict = Depends(get_current_user)):
+    """Serve uploaded files. Requires auth; tenant-scoped (1.5).
+    Superusers may read any file; other users only files owned by their school."""
     file_path = UPLOAD_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    
+
+    # Authorization: look up the ownership record. Don't leak existence.
+    record = await db.uploads.find_one({"filename": filename}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="File not found")
+    assert_same_school_or_superuser(current_user, record.get("school_code"))
+
     # Determine content type
     ext = Path(filename).suffix.lower()
     content_types = {
@@ -3270,6 +3345,15 @@ async def upload_signature(
         f.write(content)
     
     signature_url = f"/api/uploads/{filename}"
+    
+    await db.uploads.insert_one({
+        "id": str(uuid.uuid4()),
+        "filename": filename,
+        "school_code": current_user["school_code"],
+        "uploaded_by": current_user["id"],
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "purpose": "signature",
+    })
     
     # Update signatures collection (legacy)
     await db.signatures.update_one(
@@ -4886,6 +4970,35 @@ logger = logging.getLogger(__name__)
 async def startup_migrations():
     """One-time/idempotent migrations to keep the data in shape."""
     logger = logging.getLogger(__name__)
+
+    # 0) 1.5 backfill: create uploads ownership records for any files already on
+    #    disk that don't have one, so they don't become inaccessible after the
+    #    download auth change. Flagged with a sentinel school_code for review.
+    try:
+        existing = set()
+        async for rec in db.uploads.find({}, {"_id": 0, "filename": 1}):
+            if rec.get("filename"):
+                existing.add(rec["filename"])
+        backfilled = []
+        for p in UPLOAD_DIR.iterdir():
+            if p.is_file() and p.name not in existing:
+                await db.uploads.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "filename": p.name,
+                    "school_code": "UNASSIGNED_LEGACY",
+                    "uploaded_by": "",
+                    "uploaded_at": datetime.now(timezone.utc).isoformat(),
+                    "purpose": "legacy_backfill",
+                })
+                backfilled.append(p.name)
+        if backfilled:
+            logger.warning(
+                f"[migration] 1.5 backfilled {len(backfilled)} legacy upload(s) as "
+                f"UNASSIGNED_LEGACY (review manually): {backfilled}"
+            )
+    except Exception as e:
+        logger.warning(f"[migration] uploads backfill failed: {e}")
+
     # 1) Seed the shared SYSTEM Ashcombe default template if missing.
     try:
         sys_tpl = await db.report_templates.find_one(
