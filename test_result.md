@@ -394,7 +394,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 5
+  test_sequence: 6
   run_ui: false
 
 test_plan:
@@ -560,8 +560,73 @@ agent_communication:
           agent: "testing"
           comment: "✅ COMPREHENSIVE MHPS BACKEND TESTING COMPLETE (ALL 8 TEST SCENARIOS PASSED - 100% SUCCESS): All MHPS Upper School Report Card endpoints working perfectly with proper tenant-lock and RBAC. TENANT-LOCK (Test 1): SUNF admin correctly blocked (403) on GET /api/mhps/report-template ✓, MHPS admin allowed (200) ✓, JTECH superuser allowed (200) ✓. TEMPLATE STRUCTURE (Test 2): GET /api/mhps/report-template returns design_mode='mhps_upper' ✓, scope='tenant' ✓, mhps_settings with all 12 required keys (houses, subjects, core_subjects, components, component_weights, academic_grade_scale, achievement_bands, rating_scale, work_ethics_criteria, social_skills_criteria, principal_signature_block, theme) ✓, comment_bank with 13 entries ✓. OTHER SCHOOLS UNAFFECTED (Test 3): GET /api/report-templates/JTECH returns design_mode='ashcombe_default' (unaffected) ✓. SETTINGS RBAC (Test 4): MHPS admin can PUT /api/mhps/report-template/settings (200) ✓, changes persist ✓, MHPS teacher correctly blocked (403) ✓, JTECH superuser allowed (200) ✓. STRUCTURE RBAC (Test 5): MHPS admin correctly blocked from PUT /api/mhps/report-template/structure (403) ✓, JTECH superuser allowed (200) ✓. COMMENT BANK CRUD (Test 6): Teacher can GET /api/mhps/comment-bank (200) ✓, Admin can POST comment (200) ✓, Teacher blocked from POST (403) ✓, Admin can PUT comment (200) ✓, Teacher blocked from PUT (403) ✓, Teacher blocked from DELETE (403) ✓, Admin can DELETE comment (200) ✓, Comment successfully deleted ✓. REPORT CARD GET (Test 7): GET /api/mhps/report-card/{student_id}?term=Term 1&academic_year=2024-2025 returns all 9 subjects with numeric weighted_term_grade and non-empty weighted_letter (Language Arts: 84.4/B+, Mathematics: 79.0/B, Social Studies: 82.7/B+, Science: 83.4/B+, Ability: 77.0/B, Reading: 85.0/B+, Spelling: 79.0/B, Music: 86.0/B+, Physical Education: 79.0/B) ✓, achievement_standards for 4 core subjects each with band mapped from percentage (Mathematics: 82%/Proficient, Language Arts: 83%/Proficient, Social Studies: 81%/Proficient, Science: 78%/Proficient) ✓, student_overall_average present (82.4) ✓. REPORT CARD PUT (Test 8): PUT /api/mhps/report-card/{student_id} with edited subject scores recomputes weighted_term_grade correctly (Language Arts: 84.4/B+) ✓, overall_average_override=88 sets student_overall_average to 88.0 ✓, changes persist on re-fetch ✓. All tenant-lock, RBAC controls, auto-calculation logic, and persistence working as specified. Test file: /app/mhps_backend_test.py"
 
+  - task: "Teacher comments bug fix (POST /api/teacher-comments route decorator restored)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "BUG FIX: POST /api/teacher-comments route was unreachable because the @api_router.post decorator was missing. Restored the decorator at line 3133. Route now properly registered and accessible."
+        - working: true
+          agent: "testing"
+          comment: "✅ BUG FIX VERIFIED (5/5 tests passed): POST /api/teacher-comments is now properly registered and reachable. (1) Route registered (not 404/405) ✓, (2) MHPS admin can save comment (200, returns {message, id}) ✓, (3) Second POST for same student/term/year correctly updates (upsert working, same ID returned: 0ac17f8c-e59e-4d38-b654-2ceb06b5ea61) ✓, (4) GET /api/teacher-comments/class/{class_id} returns saved comments (12 entries, test student comment: 'Updated comment - excellent work') ✓, (5) MHPS teacher can save comment for student in their class (200) ✓. Bug fix successful - route is now fully functional."
+
+  - task: "Comment presets endpoints (GET/POST/DELETE /api/comment-presets)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Generic form-teacher comment presets (tenant-scoped). GET /api/comment-presets (any staff, lazy-seeds 12 defaults on first access), POST /api/comment-presets (admin/superuser only, teacher 403), DELETE /api/comment-presets/{id} (admin/superuser only, teacher 403)."
+        - working: true
+          agent: "testing"
+          comment: "✅ COMMENT PRESETS TESTING COMPLETE (5/5 tests passed): (1) GET /api/comment-presets returns 12 lazy-seeded defaults ✓, (2) POST as MHPS admin succeeds (200, created preset with id) ✓, (3) POST as MHPS teacher correctly blocked (403) ✓, (4) DELETE as MHPS admin succeeds (200) ✓, (5) DELETE as MHPS teacher correctly blocked (403) ✓. All RBAC controls and lazy seeding working correctly."
+
+  - task: "Social skill scale endpoints (GET/PUT /api/social-skill-scale)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "School-specific social skill scale configuration. GET /api/social-skill-scale returns {categories, ratings}, PUT /api/social-skill-scale (admin/superuser only, teacher 403) persists categories/ratings to report template."
+        - working: true
+          agent: "testing"
+          comment: "✅ SOCIAL SKILL SCALE TESTING COMPLETE (3/3 tests passed): (1) GET /api/social-skill-scale returns {categories: 3 items, ratings: 4 items} ✓, (2) PUT as MHPS admin succeeds (200) with custom ratings [{code:'EX',label:'Excellent'},{code:'VG',label:'Very Good'},{code:'G',label:'Good'},{code:'NI',label:'Needs Improvement'}] and changes persist correctly on re-GET ✓, (3) PUT as MHPS teacher correctly blocked (403) ✓. All RBAC controls and persistence working correctly."
+
+  - task: "Form teacher name on report card (GET /api/report-card/{student_id})"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Report card payload now includes form_teacher_name field populated from the student's class teacher assignment."
+        - working: true
+          agent: "testing"
+          comment: "✅ FORM TEACHER ON REPORT TESTING COMPLETE (1/1 test passed): GET /api/report-card/{student_id}?term=Term 1&academic_year=2024-2025 returns form_teacher_name='Akua Mensah' (non-empty, correctly populated from class teacher assignment) ✓. Report integration working correctly."
+
 agent_communication:
     - agent: "main"
       message: "NEW FEATURE: MHPS Upper School Report Card (tenant-locked to school_code=MHPS). Please test ONLY the backend /api/mhps/* endpoints. Credentials: MHPS admin (school MHPS / admin / Admin@123), MHPS teacher (school MHPS / akua.mensah / Teacher@123 — confirm this teacher exists via GET /api/users; if not, pick any MHPS teacher username), JTECH superuser (jtech.innovations@outlook.com / Xekleidoma@1). Seeded report_cards exist for Grades 4-6 students with term='Term 1', academic_year='2024-2025'. TENANT-LOCK TEST: seed SUNF via `python /app/scripts/seed_two_schools.py`, then confirm SUNF admin (SUNF/admin/Admin@123) gets 403 on GET /api/mhps/report-template (and other /api/mhps/* endpoints), while MHPS admin and JTECH superuser get 200. VERIFY: (1) GET /api/mhps/report-template returns design_mode='mhps_upper', scope='tenant', mhps_settings with all keys, and comment_bank with 13 entries; (2) other schools' templates are unaffected (GET /api/report-templates/JTECH still design_mode='ashcombe_default'); (3) PUT /api/mhps/report-template/settings — MHPS admin 200, MHPS teacher 403, superuser 200; changes persist; (4) PUT /api/mhps/report-template/structure — superuser 200, MHPS admin 403; (5) comment-bank POST/PUT/DELETE — admin 200, teacher 403; GET works for teacher; (6) GET /api/mhps/report-card/{student_id} for a seeded Grades4-6 student (pick one via GET /api/students then filter class grade_level in Grade 4/5/6) returns report_card.subjects[] each with numeric weighted_term_grade + non-empty weighted_letter, achievement_standards[] each with a band derived from percentage, and student_overall_average; (7) PUT /api/mhps/report-card/{id} with edited subject scores recomputes weighted grades; sending overall_average_override sets that exact value; (8) parent-role access: GET report-card allowed if a parent user exists (optional). Do NOT test the frontend."
     - agent: "testing"
       message: "✅ MHPS UPPER SCHOOL BACKEND TESTING COMPLETE (8/8 test scenarios passed - 100% success rate): All /api/mhps/* endpoints working perfectly with proper tenant-lock, RBAC, auto-calculation, and persistence. Comprehensive testing covered: (1) TENANT-LOCK: SUNF admin blocked (403), MHPS admin allowed (200), JTECH superuser allowed (200) ✓, (2) TEMPLATE STRUCTURE: design_mode='mhps_upper', scope='tenant', mhps_settings with all 12 keys, comment_bank with 13 entries ✓, (3) OTHER SCHOOLS UNAFFECTED: JTECH template still 'ashcombe_default' ✓, (4) SETTINGS RBAC: MHPS admin 200 with persistence, teacher 403, superuser 200 ✓, (5) STRUCTURE RBAC: admin 403, superuser 200 ✓, (6) COMMENT BANK CRUD: teacher GET 200, admin POST/PUT/DELETE 200, teacher POST/PUT/DELETE 403, deletion verified ✓, (7) REPORT CARD GET: all 9 subjects with weighted grades (Language Arts: 84.4/B+, Mathematics: 79.0/B, etc.), 4 achievement standards with bands (Mathematics: 82%/Proficient, etc.), student_overall_average=82.4 ✓, (8) REPORT CARD PUT: weighted grade recomputation working, overall_average_override=88 applied and persisted ✓. All features working as specified. Test file: /app/mhps_backend_test.py"
+
+    - agent: "main"
+      message: "BUG FIX + NEW ENDPOINTS to verify. (A) BUG: Saving a Form Teacher's comment was failing because the POST /api/teacher-comments route lost its @api_router.post decorator during a previous edit (route was unreachable). I restored the decorator. Please VERIFY: POST /api/teacher-comments works for MHPS teacher (akua.mensah / Teacher@123) and MHPS admin (admin / Admin@123) with body {student_id, term:'Term 1', academic_year:'2024-2025', comment:'...'} → 200 and returns saved/updated; then GET /api/teacher-comments/class/{class_id}?term=Term 1&academic_year=2024-2025 returns the saved comment. Requires permission manage_grades (teacher & admin have it; a parent should get 403). (B) Comment presets (generic form-teacher comments, tenant-scoped): GET /api/comment-presets (any staff, lazy-seeds ~12 defaults), POST /api/comment-presets (admin/superuser 200, teacher 403), DELETE /api/comment-presets/{id} (admin/superuser 200, teacher 403). (C) Social skill scale (school-specific): GET /api/social-skill-scale returns {categories, ratings}; PUT /api/social-skill-scale (admin/superuser 200, teacher 403) persists categories/ratings. (D) Report payload form teacher: GET /api/report-card/{student_id}?term=Term 1&academic_year=2024-2025 returns form_teacher_name equal to the class's assigned teacher name. Use MHPS credentials. Do NOT test the frontend."
+    - agent: "testing"
+      message: "✅ TEACHER COMMENTS BUG FIX + RELATED ENDPOINTS TESTING COMPLETE (14/14 tests passed - 100% success rate): PRIMARY BUG VERIFIED - POST /api/teacher-comments is now properly registered and reachable (decorator restored). All endpoints working perfectly. PRIMARY BUG TESTS (5/5 passed): (1) Route registered and reachable (not 404/405) ✓, (2) MHPS admin can save comment for any student (200, returns {message, id}) ✓, (3) Second POST for same student/term/year correctly updates (upsert working, same ID returned) ✓, (4) GET /api/teacher-comments/class/{class_id}?term=Term 1&academic_year=2024-2025 returns saved comments (12 entries, test student comment found: 'Updated comment - excellent work') ✓, (5) MHPS teacher can save comment for student in their class (200) ✓. COMMENT PRESETS (5/5 passed): (6) GET /api/comment-presets returns 12 lazy-seeded defaults ✓, (7) POST as admin succeeds (200) ✓, (8) POST as teacher correctly blocked (403) ✓, (9) DELETE as admin succeeds (200) ✓, (10) DELETE as teacher correctly blocked (403) ✓. SOCIAL SKILL SCALE (3/3 passed): (11) GET /api/social-skill-scale returns {categories: 3 items, ratings: 4 items} ✓, (12) PUT as admin succeeds (200) and changes persist correctly ✓, (13) PUT as teacher correctly blocked (403) ✓. FORM TEACHER ON REPORT (1/1 passed): (14) GET /api/report-card/{student_id}?term=Term 1&academic_year=2024-2025 returns form_teacher_name='Akua Mensah' (non-empty) ✓. All RBAC controls, upsert logic, lazy seeding, persistence, and report integration working as specified. Test file: /app/teacher_comments_bug_test.py"

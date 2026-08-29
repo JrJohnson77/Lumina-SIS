@@ -3128,6 +3128,9 @@ async def update_social_skill_scale(
 
 
 
+# ==================== TEACHER COMMENTS (save) ====================
+
+@api_router.post("/teacher-comments")
 async def save_teacher_comment(
     entry: TeacherCommentEntry,
     current_user: dict = Depends(require_permission("manage_grades"))

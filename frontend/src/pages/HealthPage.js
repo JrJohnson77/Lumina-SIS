@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -9,7 +9,8 @@ import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Textarea } from '../components/ui/textarea';
-import { Loader2, Plus, Heart, Activity, Pill, Stethoscope, AlertCircle, X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Loader2, Plus, Heart, Activity, Pill, Stethoscope, AlertCircle, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -19,6 +20,9 @@ export default function HealthPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [students, setStudents] = useState([]);
+    const [classes, setClasses] = useState([]);
+    const [search, setSearch] = useState('');
+    const [classFilter, setClassFilter] = useState('all');
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [healthRecord, setHealthRecord] = useState(null);
     const [showDialog, setShowDialog] = useState(false);
@@ -27,6 +31,7 @@ export default function HealthPage() {
 
     useEffect(() => {
         fetchStudents();
+        fetchClasses();
     }, []);
 
     const fetchStudents = async () => {
@@ -40,6 +45,25 @@ export default function HealthPage() {
             setLoading(false);
         }
     };
+
+    const fetchClasses = async () => {
+        try {
+            const res = await axios.get(`${API}/classes`, { headers: { Authorization: `Bearer ${token}` } });
+            setClasses(res.data || []);
+        } catch (error) {
+            /* non-fatal */
+        }
+    };
+
+    const filteredStudents = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return students.filter((s) => {
+            if (classFilter !== 'all' && s.class_id !== classFilter) return false;
+            if (!q) return true;
+            const hay = `${s.first_name || ''} ${s.middle_name || ''} ${s.last_name || ''} ${s.student_id || ''}`.toLowerCase();
+            return hay.includes(q);
+        });
+    }, [students, search, classFilter]);
 
     const fetchHealthRecord = async (studentId) => {
         try {
@@ -102,18 +126,39 @@ export default function HealthPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <Card className="rounded-2xl lg:col-span-1">
-                    <CardHeader>
+                    <CardHeader className="space-y-3">
                         <CardTitle>Students</CardTitle>
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search by name or ID…"
+                                className="pl-9 rounded-lg h-9"
+                                data-testid="health-search"
+                            />
+                        </div>
+                        <Select value={classFilter} onValueChange={setClassFilter}>
+                            <SelectTrigger className="h-9 rounded-lg" data-testid="health-class-filter">
+                                <SelectValue placeholder="All classes" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All classes</SelectItem>
+                                {classes.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </CardHeader>
                     <CardContent className="max-h-[600px] overflow-y-auto">
-                        {students.length === 0 ? (
+                        {filteredStudents.length === 0 ? (
                             <div className="text-center py-8 text-muted-foreground">
                                 <Activity className="w-8 h-8 mx-auto mb-2 opacity-20" />
                                 <p className="text-sm">No students found</p>
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                {students.map(student => (
+                                {filteredStudents.map(student => (
                                     <button
                                         key={student.id}
                                         onClick={() => handleStudentSelect(student)}

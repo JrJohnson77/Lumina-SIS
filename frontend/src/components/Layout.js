@@ -90,7 +90,6 @@ const NAV_GROUPS = [
         label: 'Report Manager',
         icon: FileText,
         items: [
-            { to: '/classes', label: 'Class List', icon: School, roles: ['superuser', 'admin', 'teacher'] },
             { to: '/report-manager/comments', label: "Form Teacher's Comment", icon: MessageSquare, roles: ['superuser', 'admin', 'teacher'] },
             { to: '/report-manager/social-skills', label: 'Social Skills', icon: Sparkles, roles: ['superuser', 'admin', 'teacher'] },
             { to: '/reports', label: 'Report Generation', icon: FileText, roles: ['superuser', 'admin', 'teacher'] },

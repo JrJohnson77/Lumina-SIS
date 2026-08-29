@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -9,7 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
-import { Loader2, Plus, Edit2, AlertTriangle, CheckCircle2, Clock, X } from 'lucide-react';
+import { Loader2, Plus, Edit2, AlertTriangle, CheckCircle2, Clock, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -20,6 +20,9 @@ export default function DisciplinePage() {
     const [saving, setSaving] = useState(false);
     const [incidents, setIncidents] = useState([]);
     const [students, setStudents] = useState([]);
+    const [classes, setClasses] = useState([]);
+    const [search, setSearch] = useState('');
+    const [classFilter, setClassFilter] = useState('all');
     const [showDialog, setShowDialog] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [formData, setFormData] = useState({
@@ -33,18 +36,33 @@ export default function DisciplinePage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [incRes, studRes] = await Promise.all([
+            const [incRes, studRes, clsRes] = await Promise.all([
                 axios.get(`${API}/discipline`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${API}/students`, { headers: { Authorization: `Bearer ${token}` } })
+                axios.get(`${API}/students`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${API}/classes`, { headers: { Authorization: `Bearer ${token}` } })
             ]);
             setIncidents(incRes.data);
             setStudents(studRes.data);
+            setClasses(clsRes.data || []);
         } catch (error) {
             toast.error('Failed to load discipline records');
         } finally {
             setLoading(false);
         }
     };
+
+    const filteredIncidents = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return incidents.filter((item) => {
+            const student = students.find((s) => s.id === item.student_id);
+            if (classFilter !== 'all' && (!student || student.class_id !== classFilter)) return false;
+            if (!q) return true;
+            const hay = student
+                ? `${student.first_name || ''} ${student.middle_name || ''} ${student.last_name || ''} ${student.student_id || ''}`.toLowerCase()
+                : '';
+            return hay.includes(q);
+        });
+    }, [incidents, students, search, classFilter]);
 
     const handleSubmit = async () => {
         setSaving(true);
@@ -152,15 +170,38 @@ export default function DisciplinePage() {
             </div>
 
             <Card className="rounded-2xl">
-                <CardHeader>
+                <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <CardTitle>Incidents</CardTitle>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                        <div className="relative sm:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search by student name or ID…"
+                                className="pl-9 rounded-lg h-9"
+                                data-testid="discipline-search"
+                            />
+                        </div>
+                        <Select value={classFilter} onValueChange={setClassFilter}>
+                            <SelectTrigger className="h-9 rounded-lg sm:w-44" data-testid="discipline-class-filter">
+                                <SelectValue placeholder="All classes" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All classes</SelectItem>
+                                {classes.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </CardHeader>
                 <CardContent>
-                    {incidents.length === 0 ? (
+                    {filteredIncidents.length === 0 ? (
                         <div className="text-center py-12">
                             <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-20" />
-                            <h3 className="text-lg font-medium mb-2">No incidents recorded</h3>
-                            <p className="text-muted-foreground mb-4">Start by adding a new incident</p>
+                            <h3 className="text-lg font-medium mb-2">{incidents.length === 0 ? 'No incidents recorded' : 'No incidents match your filters'}</h3>
+                            <p className="text-muted-foreground mb-4">{incidents.length === 0 ? 'Start by adding a new incident' : 'Try a different search or class'}</p>
                             <Button onClick={() => { setEditingItem(null); setFormData({ student_id: '', date: new Date().toISOString().split('T')[0], type: 'Minor', description: '', action_taken: '', status: 'Open', follow_up: '' }); setShowDialog(true); }} className="rounded-xl">
                                 <Plus className="w-4 h-4 mr-2" />
                                 Add Incident
@@ -181,7 +222,7 @@ export default function DisciplinePage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {incidents.map((item, idx) => {
+                                    {filteredIncidents.map((item, idx) => {
                                         const student = students.find(s => s.id === item.student_id);
                                         return (
                                             <tr key={item.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
