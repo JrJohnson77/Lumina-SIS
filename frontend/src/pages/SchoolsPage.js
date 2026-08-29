@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { mediaUrl } from '../lib/media';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -506,7 +507,7 @@ export default function SchoolsPage() {
                                         {principalSignature && (
                                             <div className="border border-border rounded-lg p-3 bg-muted/30">
                                                 <img 
-                                                    src={`${process.env.REACT_APP_BACKEND_URL}${principalSignature}`} 
+                                                    src={mediaUrl(principalSignature)} 
                                                     alt="Principal Signature" 
                                                     className="h-16 object-contain"
                                                 />
@@ -532,7 +533,7 @@ export default function SchoolsPage() {
                                         {teacherSignature && (
                                             <div className="border border-border rounded-lg p-3 bg-muted/30">
                                                 <img 
-                                                    src={`${process.env.REACT_APP_BACKEND_URL}${teacherSignature}`} 
+                                                    src={mediaUrl(teacherSignature)} 
                                                     alt="Teacher Signature" 
                                                     className="h-16 object-contain"
                                                 />

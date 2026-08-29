@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { mediaUrl } from '../lib/media';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -351,7 +352,7 @@ function StaffDashboardTab({ staff, initials, onCardClick, canEdit, onReload }) 
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const fileRef = useRef(null);
 
-    const resolvePhoto = (url) => (!url ? '' : (url.startsWith('http') ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`));
+    const resolvePhoto = (url) => mediaUrl(url) || '';
 
     const handlePhotoChange = async (e) => {
         const file = e.target.files?.[0];

@@ -1,4 +1,5 @@
 import React, { forwardRef } from 'react';
+import { mediaUrl } from '../lib/media';
 
 /**
  * MHPS Upper School Report Card (Grades 4-6) — tenant-locked print template.
@@ -12,8 +13,6 @@ import React, { forwardRef } from 'react';
  *          { student, class_info, term, academic_year, report_card,
  *            settings, comment_bank, school }
  */
-
-const BACKEND = process.env.REACT_APP_BACKEND_URL || '';
 
 const fmtDOB = (iso) => {
   if (!iso) return '';
@@ -65,9 +64,7 @@ const MHPSReportCardTemplate = forwardRef(({ data }, ref) => {
 
   const selectedComments = new Set(rc.selected_comments || []);
 
-  const logoUrl = school.logo_url
-    ? (school.logo_url.startsWith('http') ? school.logo_url : `${BACKEND}${school.logo_url}`)
-    : '';
+  const logoUrl = school.logo_url ? mediaUrl(school.logo_url) : '';
 
   const cellBorder = `1px solid ${LINE}`;
 

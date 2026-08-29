@@ -1,4 +1,5 @@
 import React from 'react';
+import { mediaUrl } from '../lib/media';
 
 /**
  * Lumina-SIS — Default Report Card Template (v2)
@@ -39,11 +40,7 @@ const fmtDate = (d) => new Date(d || Date.now()).toLocaleDateString('en-GB', {
     day: '2-digit', month: 'long', year: 'numeric',
 });
 
-const normalizeUrl = (url) => {
-    if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
-    return `${process.env.REACT_APP_BACKEND_URL || ''}${url}`;
-};
+const normalizeUrl = (url) => mediaUrl(url) || '';
 
 // Inline star SVG. Filled = indigo fill, empty = light gray fill (no border).
 const Star = ({ filled }) => (

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { mediaUrl } from '../lib/media';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -433,7 +434,7 @@ export default function ImportExportPage() {
                             {signatures.teacher_signature ? (
                                 <div className="border border-border rounded-xl p-4 flex flex-col items-center gap-3">
                                     <img
-                                        src={`${process.env.REACT_APP_BACKEND_URL}${signatures.teacher_signature}`}
+                                        src={mediaUrl(signatures.teacher_signature)}
                                         alt="Teacher Signature"
                                         className="max-h-24 object-contain"
                                         data-testid="teacher-signature-img"
@@ -480,7 +481,7 @@ export default function ImportExportPage() {
                             {signatures.principal_signature ? (
                                 <div className="border border-border rounded-xl p-4 flex flex-col items-center gap-3">
                                     <img
-                                        src={`${process.env.REACT_APP_BACKEND_URL}${signatures.principal_signature}`}
+                                        src={mediaUrl(signatures.principal_signature)}
                                         alt="Principal Signature"
                                         className="max-h-24 object-contain"
                                         data-testid="principal-signature-img"

@@ -6,6 +6,7 @@ import {
     Home, Phone, Smartphone, Mail, GraduationCap, School,
     Users, Plus, ExternalLink, User, ChevronRight, Camera, X,
 } from 'lucide-react';
+import { mediaUrl } from '../../lib/media';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -14,10 +15,7 @@ const buildStudentPayload = (student, overrides) => {
     return { ...rest, ...overrides };
 };
 
-const resolvePhoto = (url) => {
-    if (!url) return '';
-    return url.startsWith('http') ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`;
-};
+const resolvePhoto = (url) => mediaUrl(url) || '';
 
 const ageFromDob = (dob) => {
     if (!dob) return '';

@@ -20,6 +20,7 @@ import bcrypt
 import io
 import shutil
 import json
+import requests
 
 from ashcombe_template import (
     ASHCOMBE_BODY_DEFAULT,
@@ -45,6 +46,71 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# ==================== EMERGENT OBJECT STORAGE ====================
+# Durable, deployment-safe file storage (replaces pod-local disk writes).
+_STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+STORAGE_URL = _STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+STORAGE_APP_NAME = "lumina-sis"
+_storage_key = None
+
+
+def init_storage(force: bool = False):
+    """Mint (and cache) a session-scoped storage key. Call once at startup."""
+    global _storage_key
+    if _storage_key and not force:
+        return _storage_key
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+    resp.raise_for_status()
+    _storage_key = resp.json()["storage_key"]
+    return _storage_key
+
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    """Upload bytes to object storage. Returns {path, size, etag}."""
+    key = init_storage()
+    resp = requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data, timeout=120,
+    )
+    if resp.status_code == 404:
+        key = init_storage(force=True)
+        resp = requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data, timeout=120,
+        )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_object(path: str) -> tuple:
+    """Download bytes from object storage. Returns (bytes, content_type)."""
+    key = init_storage()
+    resp = requests.get(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key}, timeout=60,
+    )
+    if resp.status_code == 404:
+        key = init_storage(force=True)
+        resp = requests.get(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key}, timeout=60,
+        )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+
+def _mime_for(ext: str) -> str:
+    return {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+        ".gif": "image/gif", ".webp": "image/webp", ".pdf": "application/pdf",
+        ".html": "text/html; charset=utf-8", ".md": "text/markdown; charset=utf-8",
+        ".txt": "text/plain; charset=utf-8",
+    }.get(ext.lower(), "application/octet-stream")
+
 
 # JWT Settings
 JWT_SECRET = os.environ.get('JWT_SECRET')
@@ -1060,6 +1126,10 @@ async def toggle_academic_year(
         {"$set": {"academic_years": academic_years}}
     )
     
+    await write_audit(
+        current_user, "update", "school", school_id,
+        f"{school.get('school_code','')} · AY '{year}' {'enabled' if is_enabled else 'disabled'}",
+    )
     return {"message": f"Academic year {year} {'enabled' if is_enabled else 'disabled'}"}
 
 @api_router.put("/schools/{school_id}/academic-years/{year}/set-current")
@@ -1232,21 +1302,26 @@ async def upload_school_signature(
     
     file_id = str(uuid.uuid4())
     filename = f"signature_{signature_type}_{school['school_code']}_{file_id}{ext}"
-    file_path = UPLOAD_DIR / filename
-    
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
+    storage_path = f"{STORAGE_APP_NAME}/uploads/{school['school_code']}/{filename}"
+    content_type = _mime_for(ext)
+    result = put_object(storage_path, content, content_type)
+
     signature_url = f"/api/uploads/{filename}"
     
     await db.uploads.insert_one({
         "id": str(uuid.uuid4()),
         "filename": filename,
+        "storage_path": result["path"],
+        "content_type": content_type,
         "school_code": school["school_code"],
         "uploaded_by": current_user["id"],
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "purpose": "signature",
     })
+    await write_audit(
+        current_user, "upload", "signature", file_id,
+        f"{school['school_code']} · uploaded {signature_type} signature",
+    )
     
     # Update school with signature
     field_name = f"{signature_type}_signature"
@@ -1416,12 +1491,14 @@ async def update_report_template(
             {"$set": update_doc}
         )
         updated = await db.report_templates.find_one({"school_code": sc}, {"_id": 0})
+        await write_audit(current_user, "update", "report_template", sc, f"{sc} report template updated")
         return updated
     else:
         update_doc["id"] = str(uuid.uuid4())
         update_doc["created_at"] = now
         await db.report_templates.insert_one(update_doc)
         update_doc.pop("_id", None)
+        await write_audit(current_user, "create", "report_template", sc, f"{sc} report template created")
         return update_doc
 
 @api_router.post("/report-templates/{school_code}/reset-default")
@@ -1968,6 +2045,10 @@ async def create_user(user_data: UserCreate, current_user: dict = Depends(requir
     }
     await db.users.insert_one(user_doc)
     
+    await write_audit(
+        current_user, "create", "user", user_id,
+        f"{school_code} · {user_data.username} ({user_data.role})",
+    )
     return UserResponse(
         id=user_id,
         username=user_data.username,
@@ -2001,6 +2082,10 @@ async def update_user_role(user_id: str, role_data: RoleUpdate, current_user: di
         update_data["permissions"] = role_data.permissions
     
     await db.users.update_one({"id": user_id}, {"$set": update_data})
+    await write_audit(
+        current_user, "update", "user", user_id,
+        f"{user.get('username','')} · role → {role_data.role}",
+    )
     return {"message": "User updated successfully"}
 
 @api_router.delete("/users/{user_id}")
@@ -2022,6 +2107,7 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_roles([
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
     
     await db.users.delete_one({"id": user_id})
+    await write_audit(current_user, "delete", "user", user_id, user.get("username", ""))
     return {"message": "User deleted successfully"}
 
 class ResetCredentials(BaseModel):
@@ -2067,6 +2153,10 @@ async def reset_user_credentials(
     
     await db.users.update_one({"id": user_id}, {"$set": update_data})
     
+    await write_audit(
+        current_user, "update", "user", user_id,
+        f"{user.get('username','')} · credentials reset ({', '.join(update_data.keys())})",
+    )
     return {"message": "Credentials updated successfully"}
 
 class UserProfileUpdate(BaseModel):
@@ -2280,6 +2370,7 @@ async def create_class(class_data: ClassCreate, current_user: dict = Depends(req
         "created_at": now
     }
     await db.classes.insert_one(doc)
+    await write_audit(current_user, "create", "class", doc["id"], doc.get("name", ""))
     return ClassResponse(**doc)
 
 @api_router.get("/classes", response_model=List[ClassResponse])
@@ -2312,6 +2403,7 @@ async def update_class(class_id: str, class_data: ClassCreate, current_user: dic
         raise HTTPException(status_code=404, detail="Class not found")
     
     updated = await db.classes.find_one(query, {"_id": 0})
+    await write_audit(current_user, "update", "class", class_id, updated.get("name", ""))
     return ClassResponse(**updated)
 
 @api_router.delete("/classes/{class_id}")
@@ -2320,6 +2412,7 @@ async def delete_class(class_id: str, current_user: dict = Depends(require_permi
     result = await db.classes.delete_one(query)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Class not found")
+    await write_audit(current_user, "delete", "class", class_id, "")
     return {"message": "Class deleted successfully"}
 
 # ==================== ATTENDANCE ROUTES ====================
@@ -2351,6 +2444,10 @@ async def mark_attendance(attendance: AttendanceCreate, current_user: dict = Dep
     else:
         await db.attendance.insert_one(doc)
     
+    await write_audit(
+        current_user, "update" if existing else "create", "attendance", doc["id"],
+        f"student {attendance.student_id} · {attendance.date} · {attendance.status}",
+    )
     return AttendanceResponse(**doc)
 
 @api_router.post("/attendance/bulk")
@@ -2386,6 +2483,10 @@ async def mark_bulk_attendance(data: AttendanceBulkCreate, current_user: dict = 
             await db.attendance.insert_one(doc)
             created_count += 1
     
+    await write_audit(
+        current_user, "update", "attendance", data.class_id,
+        f"bulk · class {data.class_id} · {data.date} · {created_count} new, {updated_count} updated",
+    )
     return {"message": f"Attendance recorded: {created_count} new, {updated_count} updated"}
 
 @api_router.get("/attendance", response_model=List[AttendanceResponse])
@@ -2573,6 +2674,7 @@ async def save_gradebook(entry: GradebookEntry, current_user: dict = Depends(req
         doc["created_at"] = now
         await db.gradebook.insert_one(doc)
     
+    await write_audit(current_user, "update", "gradebook", doc["id"], f"{doc.get('term','')} {doc.get('academic_year','')}")
     return GradebookResponse(**doc)
 
 @api_router.get("/gradebook", response_model=List[GradebookResponse])
@@ -2618,6 +2720,7 @@ async def delete_gradebook(gradebook_id: str, current_user: dict = Depends(requi
     result = await db.gradebook.delete_one(query)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Gradebook entry not found")
+    await write_audit(current_user, "delete", "gradebook", gradebook_id, "")
     return {"message": "Gradebook entry deleted"}
 
 # ==================== REPORT CARD ROUTES ====================
@@ -2932,12 +3035,10 @@ async def upload_photo(
     # Generate unique filename
     file_id = str(uuid.uuid4())
     filename = f"{file_id}{ext}"
-    file_path = UPLOAD_DIR / filename
-    
-    # Save file
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
+    storage_path = f"{STORAGE_APP_NAME}/uploads/{current_user['school_code']}/{filename}"
+    content_type = _mime_for(ext)
+    result = put_object(storage_path, content, content_type)
+
     # Return the URL to access the photo
     photo_url = f"/api/uploads/{filename}"
 
@@ -2945,11 +3046,14 @@ async def upload_photo(
     await db.uploads.insert_one({
         "id": str(uuid.uuid4()),
         "filename": filename,
+        "storage_path": result["path"],
+        "content_type": content_type,
         "school_code": current_user["school_code"],
         "uploaded_by": current_user["id"],
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "purpose": "photo",
     })
+    await write_audit(current_user, "upload", "photo", file_id, f"uploaded profile photo {filename}")
 
     return {"photo_url": photo_url, "filename": filename}
 
@@ -2967,17 +3071,20 @@ async def upload_template_background(
         raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB")
     file_id = str(uuid.uuid4())
     filename = f"bg_{file_id}{ext}"
-    file_path = UPLOAD_DIR / filename
-    with open(file_path, "wb") as f:
-        f.write(content)
+    storage_path = f"{STORAGE_APP_NAME}/uploads/{current_user['school_code']}/{filename}"
+    content_type = _mime_for(ext)
+    result = put_object(storage_path, content, content_type)
     await db.uploads.insert_one({
         "id": str(uuid.uuid4()),
         "filename": filename,
+        "storage_path": result["path"],
+        "content_type": content_type,
         "school_code": current_user["school_code"],
         "uploaded_by": current_user["id"],
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "purpose": "template_bg",
     })
+    await write_audit(current_user, "upload", "template_bg", file_id, f"uploaded template background {filename}")
     return {"background_url": f"/api/uploads/{filename}", "filename": filename}
 
 @api_router.get("/uploads/{filename}")
@@ -3001,31 +3108,27 @@ async def get_upload(
         raise HTTPException(status_code=401, detail="Not authenticated")
     current_user = await _user_from_token(jwt_token)
 
-    file_path = UPLOAD_DIR / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
     # Authorization: look up the ownership record. Don't leak existence.
     record = await db.uploads.find_one({"filename": filename}, {"_id": 0})
     if not record:
         raise HTTPException(status_code=404, detail="File not found")
     assert_same_school_or_superuser(current_user, record.get("school_code"))
 
-    # Determine content type
     ext = Path(filename).suffix.lower()
-    content_types = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".gif": "image/gif",
-        ".webp": "image/webp",
-        ".html": "text/html; charset=utf-8",
-        ".md":   "text/markdown; charset=utf-8",
-        ".pdf":  "application/pdf",
-        ".txt":  "text/plain; charset=utf-8",
-    }
-    content_type = content_types.get(ext, "application/octet-stream")
+    content_type = record.get("content_type") or _mime_for(ext)
 
+    storage_path = record.get("storage_path")
+    if storage_path:
+        try:
+            data, ct = get_object(storage_path)
+        except requests.HTTPError:
+            raise HTTPException(status_code=404, detail="File not found")
+        return Response(content=data, media_type=content_type or ct)
+
+    # Legacy fallback: files written to pod-local disk before object storage.
+    file_path = UPLOAD_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, media_type=content_type)
 
 # ==================== SOCIAL SKILLS ====================
@@ -3047,6 +3150,7 @@ async def save_social_skills(entry: SocialSkillsEntry, current_user: dict = Depe
             {"_id": existing["_id"]},
             {"$set": {"skills": entry.skills, "updated_at": now}}
         )
+        await write_audit(current_user, "update", "social_skills", existing["id"], f"student {entry.student_id} · {entry.term}")
         return {"message": "Social skills updated", "id": existing["id"]}
     else:
         doc = {
@@ -3060,6 +3164,7 @@ async def save_social_skills(entry: SocialSkillsEntry, current_user: dict = Depe
             "updated_at": now
         }
         await db.social_skills.insert_one(doc)
+        await write_audit(current_user, "create", "social_skills", doc["id"], f"student {entry.student_id} · {entry.term}")
         return {"message": "Social skills saved", "id": doc["id"]}
 
 @api_router.get("/social-skills/{student_id}")
@@ -3276,6 +3381,7 @@ async def save_teacher_comment(
                 "updated_by": current_user["id"],
             }}
         )
+        await write_audit(current_user, "update", "teacher_comment", existing["id"], f"student {entry.student_id} · {entry.term}")
         return {"message": "Comment updated", "id": existing["id"]}
     else:
         doc = {
@@ -3291,6 +3397,7 @@ async def save_teacher_comment(
             "updated_by": current_user["id"],
         }
         await db.teacher_comments.insert_one(doc)
+        await write_audit(current_user, "create", "teacher_comment", doc["id"], f"student {entry.student_id} · {entry.term}")
         return {"message": "Comment saved", "id": doc["id"]}
 
 @api_router.get("/teacher-comments/class/{class_id}")
@@ -3369,21 +3476,26 @@ async def upload_signature(
     
     file_id = str(uuid.uuid4())
     filename = f"signature_{signature_type}_{file_id}{ext}"
-    file_path = UPLOAD_DIR / filename
-    
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
+    storage_path = f"{STORAGE_APP_NAME}/uploads/{current_user['school_code']}/{filename}"
+    content_type = _mime_for(ext)
+    result = put_object(storage_path, content, content_type)
+
     signature_url = f"/api/uploads/{filename}"
     
     await db.uploads.insert_one({
         "id": str(uuid.uuid4()),
         "filename": filename,
+        "storage_path": result["path"],
+        "content_type": content_type,
         "school_code": current_user["school_code"],
         "uploaded_by": current_user["id"],
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         "purpose": "signature",
     })
+    await write_audit(
+        current_user, "upload", "signature", file_id,
+        f"{current_user['school_code']} · uploaded {signature_type} signature (legacy endpoint)",
+    )
     
     # Update signatures collection (legacy)
     await db.signatures.update_one(
@@ -3471,6 +3583,7 @@ async def import_students_csv(
         except Exception as e:
             errors.append(f"Row {row_num}: {str(e)}")
     
+    await write_audit(current_user, "import", "student", class_id, f"CSV import · {imported} students into class {class_id}")
     return {
         "imported": imported,
         "errors": errors,
@@ -3531,6 +3644,7 @@ async def import_teachers_csv(
         except Exception as e:
             errors.append(f"Row {row_num}: {str(e)}")
     
+    await write_audit(current_user, "import", "user", current_user["school_code"], f"CSV import · {imported} teachers")
     return {
         "imported": imported,
         "errors": errors,
@@ -3766,6 +3880,7 @@ async def create_admission(
     }
     await db.admissions.insert_one(doc)
     doc.pop("_id", None)
+    await write_audit(current_user, "create", "admission", doc["id"], f"{doc.get('first_name','')} {doc.get('last_name','')}".strip())
     return AdmissionResponse(**doc)
 
 
@@ -3784,6 +3899,7 @@ async def update_admission(
     update = {**payload.model_dump(), "updated_at": now}
     await db.admissions.update_one(query, {"$set": update})
     updated = await db.admissions.find_one(query, {"_id": 0})
+    await write_audit(current_user, "update", "admission", admission_id, f"{updated.get('first_name','')} {updated.get('last_name','')}".strip())
     return AdmissionResponse(**updated)
 
 
@@ -3796,6 +3912,7 @@ async def delete_admission(
     result = await db.admissions.delete_one(query)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Admission record not found")
+    await write_audit(current_user, "delete", "admission", admission_id, "")
     return {"message": "Admission record deleted"}
 
 
@@ -4557,6 +4674,10 @@ async def forgot_password(req: ForgotPasswordRequest):
                 f"[FORGOT PASSWORD] school={req.school_code} user={req.username} token={token} "
                 f"(email send {'failed' if user.get('email') else 'skipped: no email on file'}; valid 1h)"
             )
+        await write_audit(
+            {"id": user["id"], "name": user.get("name", ""), "role": "", "school_code": req.school_code.upper()},
+            "request", "password_reset", user["id"], f"forgot-password requested (delivery={delivery})",
+        )
     # Always 200 — no enumeration. `delivery` is only useful in dev/tests.
     return {
         "message": "If the account exists, a reset code has been sent to the email on file.",
@@ -4581,6 +4702,10 @@ async def reset_password(req: ResetPasswordRequest):
     new_hash = hash_password(req.new_password)
     await db.users.update_one({"id": record["user_id"]}, {"$set": {"password_hash": new_hash}})
     await db.password_resets.update_one({"token": req.token}, {"$set": {"used": True}})
+    await write_audit(
+        {"id": record["user_id"], "name": "", "role": "", "school_code": record.get("school_code", "")},
+        "update", "password_reset", record["user_id"], "password reset via token",
+    )
     return {"message": "Password reset successful"}
 
 
@@ -5009,6 +5134,13 @@ logger = logging.getLogger(__name__)
 async def startup_migrations():
     """One-time/idempotent migrations to keep the data in shape."""
     logger = logging.getLogger(__name__)
+
+    # Object storage: mint the session storage key once.
+    try:
+        init_storage()
+        logger.info("[startup] object storage initialized")
+    except Exception as e:
+        logger.error(f"[startup] object storage init failed: {e}")
 
     # 0) 1.5 backfill: create uploads ownership records for any files already on
     #    disk that don't have one, so they don't become inaccessible after the

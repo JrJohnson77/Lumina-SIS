@@ -1,0 +1,40 @@
+{
+  "summary": "Backend-only iteration 19: verified (1) Emergent Object-Storage migration for the 4 file-upload endpoints — POST /api/upload/photo and POST /api/schools/{id}/signatures/upload return /api/uploads/{filename} URLs, the served bytes exactly equal the uploaded bytes with correct image/png content-type, and db.uploads records now carry a storage_path field pointing at object storage (legacy disk fallback still supported by GET /api/uploads/{filename}); (2) tenant-scoped download authorization is intact — no-token GET -> 401, cross-tenant non-superuser (SUNF admin reading MHPS file) -> 403, superuser (JTECH) -> 200 across tenants; (3) write_audit() coverage on 10 newly-instrumented mutating endpoints (create user, reset credentials, mark attendance, bulk attendance, social-skills, teacher-comment, admission POST/PUT/DELETE, academic-year toggle, report-template PUT) — every action produced a matching row via GET /api/audit-logs; (4) regression: MHPS admin GETs on /students, /users, /classes, /attendance, /gradebook all 200; (5) forgot-password (POST /api/auth/forgot-password) still returns 200 with delivery status and writes a password_reset audit row, and returns 200 for unknown username (no enumeration). 22/22 pytest assertions pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "passed_tests": [
+    "POST /api/upload/photo returns photo_url=/api/uploads/{uuid}.png; served bytes equal upload; content-type image/png",
+    "GET /api/uploads/{f} works via both ?token= and Authorization: Bearer header",
+    "GET /api/uploads/{f} without token -> 401",
+    "GET /api/uploads/{f} with a DIFFERENT tenant's non-superuser token -> 403",
+    "Superuser (JTECH) can read another tenant's file -> 200",
+    "POST /api/schools/{id}/signatures/upload (principal) returns signature_url; served bytes match upload",
+    "Audit rows written for: create user, reset user credentials (PUT /users/{id}/credentials), mark attendance, bulk attendance, social-skills upsert, teacher-comment upsert, admission POST+PUT+DELETE (all three actions found in audit-logs for the same entity_id), academic-year toggle, report-template PUT",
+    "Photo upload also writes an 'upload' audit row on entity_type='photo'",
+    "MHPS admin core reads: /students /users /classes /attendance /gradebook all 200 with list bodies",
+    "POST /api/auth/forgot-password returns {message, delivery} with delivery in {email, log, none} and writes a 'password_reset' audit row",
+    "POST /api/auth/forgot-password with unknown username still returns 200 (no account enumeration)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_object_storage_and_audit.py",
+    "/app/test_reports/pytest/iteration_19.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Object-storage init: init_storage() force-refreshes on any 404 from PUT/GET which handles session-key rotation cleanly. put_object/get_object propagate requests.HTTPError; the serve endpoint (GET /api/uploads/{filename}) catches only HTTPError -> 404 — a network-level error (ConnectionError/Timeout) would surface as a 500 to the client. Consider wrapping in a broader except requests.RequestException and returning 502/503 for clarity.",
+    "GET /api/uploads/{filename} accepts JWT via ?token= query-param so <img> tags can render; this exposes the JWT in server access logs and referrer headers. Consider a short-lived signed download URL (HMAC of filename+exp) instead of piping the full JWT through query strings.",
+    "assert_same_school_or_superuser is called AFTER a 404-safe find_one, which correctly avoids leaking existence. Good.",
+    "write_audit() swallows all exceptions with a warning — that's the right choice for a best-effort side-effect, but audit-log persistence failures will be silent in production. If audit is a compliance requirement, add a metric/alarm counter for write_audit failures.",
+    "The 4 upload endpoints persist storage_path in db.uploads; if init_storage() is re-provisioned to a different bucket the old storage_path will 404. Serving code falls back to local disk only — there is no re-mapping if the storage backend key namespace changes. Document this operational constraint or store the STORAGE_URL base alongside storage_path for future migration.",
+    "forgot_password uses uuid.uuid4().hex as the reset token (128 bits). Fine, but consider secrets.token_urlsafe(32) which is slightly stronger and unambiguously random.",
+    "Non-blocking: audit rows are indexed by created_at desc but there is no compound index on (school_code, entity_type, entity_id). At scale the audit-logs GET with entity_id filter will full-scan per tenant."
+  ],
+  "updated_files": ["/app/backend/tests/test_object_storage_and_audit.py"],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "n/a (backend-only scope)"},
+  "test_credentials": "MHPS admin (school=MHPS,user=admin,pw=Admin@123); JTECH superuser (school=JTECH,user=jtech.innovations@outlook.com,pw=Xekleidoma@1); SUNF admin (school=SUNF,user=admin,pw=Admin@123) — used only for cross-tenant 403 assertion.",
+  "seed_data_creation": "Test-scope inserts (all with TEST_ prefix or fake academic_year=2099-2100) cleaned up: TEST_user was deleted in the module teardown fixture; TEST admission was deleted by the CRUD test itself. Attendance rows for date=2099-01-01/02 and social-skills/teacher-comments for 2099-2100 remain but are inert (impossible-year keys, won't affect real data).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reusable regression file lives at /app/backend/tests/test_object_storage_and_audit.py. It uses REACT_APP_BACKEND_URL from env, module-scoped tokens (rate-limit safe), a pure-python PNG builder (no Pillow), and polls /api/audit-logs up to 5 times to accommodate best-effort async audit writes. To rerun: pytest /app/backend/tests/test_object_storage_and_audit.py -v. Key server.py landmarks confirmed working: init_storage/put_object/get_object at lines 59-103; write_audit at ~line 4510; upload endpoints at 1282 (school signature), 3017 (photo), 3060 (template bg), 3459 (legacy signature); serve endpoint at 3090 with legacy-disk fallback; audit list endpoint at 4529. MHPS in current DB has academic_years=[] so the AY-toggle test uses the first school (RVSD) that has AYs seeded — swap target in test if seed changes.",
+  "rca of the issue": "n/a — no bug found this iteration."
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { mediaUrl } from '../lib/media';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useDefaultAcademicYear } from '../hooks/useDefaultAcademicYear';
@@ -404,7 +405,7 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
             <div className="text-center pb-3 mb-4" style={{ borderBottom: `2px solid ${headerBg}` }}>
                 <div className="flex justify-center items-center gap-4 mb-2">
                     {tpl.logo_url ? (
-                        <img src={tpl.logo_url.startsWith('http') ? tpl.logo_url : `${process.env.REACT_APP_BACKEND_URL}${tpl.logo_url}`} alt="Logo" className="w-16 h-16 object-contain" />
+                        <img src={mediaUrl(tpl.logo_url)} alt="Logo" className="w-16 h-16 object-contain" />
                     ) : (
                         <div className="w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm" style={{ backgroundColor: headerBg, color: headerText }}>
                             {tpl.school_code || '?'}
@@ -628,7 +629,7 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
                 <div className="grid grid-cols-2 gap-8 mt-6 pt-4">
                     <div className="text-center">
                         {signatures?.teacher_signature ? (
-                            <img src={`${process.env.REACT_APP_BACKEND_URL}${signatures.teacher_signature}`} alt="Teacher Signature" className="h-10 mx-auto mb-1 object-contain" />
+                            <img src={mediaUrl(signatures.teacher_signature)} alt="Teacher Signature" className="h-10 mx-auto mb-1 object-contain" />
                         ) : (
                             <div className="border-b border-black h-8 mb-1"></div>
                         )}
@@ -637,7 +638,7 @@ const DynamicReportCard = ({ data, classInfo, term, academicYear, totalStudents,
                     </div>
                     <div className="text-center">
                         {signatures?.principal_signature ? (
-                            <img src={`${process.env.REACT_APP_BACKEND_URL}${signatures.principal_signature}`} alt="Principal Signature" className="h-10 mx-auto mb-1 object-contain" />
+                            <img src={mediaUrl(signatures.principal_signature)} alt="Principal Signature" className="h-10 mx-auto mb-1 object-contain" />
                         ) : (
                             <div className="border-b border-black h-8 mb-1"></div>
                         )}
