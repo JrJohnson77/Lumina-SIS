@@ -378,7 +378,7 @@
    3-col grid prevents narrow single-col cards from forcing text to wrap character-by-character. */
 .lp-dashboard {
     display: grid;
-    grid-template-columns: 220px 1fr 1fr;
+    grid-template-columns: 1fr 1fr 220px;
     gap: 16px;
 }
 
@@ -400,6 +400,7 @@
 .lp-dashboard .lp-card--span2 { grid-column: span 2; }
 .lp-dashboard .lp-card--span3 { grid-column: span 3; }
 .lp-dashboard .lp-card--photo {
+    grid-column: 3;
     grid-row: span 2;
     display: flex;
     flex-direction: column;
@@ -700,7 +701,7 @@
     .lumina-profile-left--collapsed { width: 100%; max-width: 100%; min-width: 0; }
     .lumina-profile-left { max-height: 320px; }
     .lp-dashboard { grid-template-columns: 1fr; }
-    .lp-dashboard .lp-card--photo { grid-row: auto; }
+    .lp-dashboard .lp-card--photo { grid-row: auto; grid-column: auto; }
     .lp-row, .lp-row--3 { grid-template-columns: 1fr; }
     .lumina-profile-main { padding: 0; }
     .lp-ribbon, .lp-chipnav, .lp-section { padding-left: 16px; padding-right: 16px; }

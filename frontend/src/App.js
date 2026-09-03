@@ -81,7 +81,7 @@ const PublicRoute = ({ children }) => {
     }
     
     if (isAuthenticated) {
-        return <Navigate to={getLastPage()} replace />;
+        return <Navigate to="/dashboard" replace />;
     }
     
     return children;

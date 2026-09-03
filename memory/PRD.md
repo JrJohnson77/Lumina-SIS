@@ -71,6 +71,10 @@ Rebranded from "EduManager" to "Lumina-SIS" with a modern, sleek UI redesign.
 - [ ] Tech-debt: split server.py (~3k lines) into routers by module
 
 ## Changelog
+- **Jun 2026 (Session 21 — Login default + profile photo placement)**:
+  - **Default landing page**: Every user now lands on `/dashboard` immediately after login (removed the `getLastPage()` restore in `LoginPage.js` and `App.js` PublicRoute).
+  - **Profile ID photo moved right**: On both Student (`DashboardTab`) and Staff (`StaffProfilePage`) dashboards, the ID photo card now sits in the far-RIGHT column. CSS-only change in `styles/student-profile.css` (`.lp-dashboard` columns → `1fr 1fr 220px`, `.lp-card--photo` → `grid-column: 3`). Floating tabs kept horizontal per user request. Verified via screenshots.
+
 - **Jun 2026 (Session 20 — Object Storage + Audit completion)**:
   - **Deployment blocker fixed**: Migrated all 4 file-upload endpoints (student/staff photos, principal/teacher signatures, report-template backgrounds) from pod-local disk (`uploads/`) to **Emergent Object Storage**. Added `init_storage/put_object/get_object/_mime_for` helpers (server.py ~L59-103), `EMERGENT_LLM_KEY` in backend/.env, and startup init. Uploads now store `storage_path` in `db.uploads`; the tenant-scoped serve endpoint `GET /api/uploads/{filename}?token=` reads from object storage with legacy-disk fallback. Verified end-to-end (upload → serve returns exact bytes, correct content-type).
   - **Phase 2 Task 2.1 COMPLETE**: `write_audit()` now on ALL 73 mutating endpoints (added to remaining 17: academic-year toggle, report-template PUT, users create/role/credentials, attendance + bulk, gradebook delete, social-skills, teacher-comments, student/teacher CSV imports, admissions POST/PUT/DELETE, forgot/reset-password, all 4 uploads).

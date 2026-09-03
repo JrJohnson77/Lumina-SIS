@@ -24,7 +24,7 @@ export default function LoginPage() {
         try {
             await login(schoolCode, username, password);
             toast.success('Welcome back!');
-            navigate(getLastPage());
+            navigate('/dashboard');
         } catch (error) {
             const message = error.response?.data?.detail || 'Invalid credentials';
             toast.error(message);
