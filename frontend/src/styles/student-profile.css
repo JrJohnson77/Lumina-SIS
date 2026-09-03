@@ -401,7 +401,7 @@
 .lp-dashboard .lp-card--span3 { grid-column: span 3; }
 .lp-dashboard .lp-card--photo {
     grid-column: 3;
-    grid-row: span 2;
+    grid-row: 1 / span 2;
     display: flex;
     flex-direction: column;
     align-items: center;
